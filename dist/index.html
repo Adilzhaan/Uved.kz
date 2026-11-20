@@ -3,12 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#172924" />
+    <meta name="theme-color" content="#2563eb" />
     <meta
       name="description"
-      content="Pulse — рабочее пространство для управления массовыми email-рассылками, кампаниями и аудиторией."
+      content="Uved.kz — подключение WhatsApp-номеров и база контактов для рассылки."
     />
-    <title>Обзор · Pulse</title>
+    <title>WhatsApp-номера · Uved.kz</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
     <script src="/app.js" defer></script>
@@ -16,38 +16,17 @@
   <body>
     <a class="skip-link" href="#main">К содержимому</a>
     <aside id="sidebar" class="sidebar" aria-label="Основная навигация">
-      <a class="brand" href="#overview"
+      <a class="brand" href="#campaigns"
         ><img src="/favicon.svg" alt="" width="35" height="35" /><span
-          >pulse<span class="brand-period">.</span></span
+          >Uved<span class="brand-period">.kz</span></span
         ></a
       >
-      <button class="workspace" id="workspace">
-        <span class="workspace-logo">N</span
-        ><span
-          ><strong>Nalog Project</strong
-          ><small>Рабочее пространство</small></span
-        ><span data-icon="chevrons"></span>
-      </button>
       <div class="nav-label">УПРАВЛЕНИЕ</div>
       <nav id="navigation"></nav>
       <div class="sidebar-bottom">
-        <div class="plan-card">
-          <div>
-            <span class="plan-icon" data-icon="zap"></span
-            ><strong>Масштаб без границ</strong>
-          </div>
-          <p>92 000 сообщений.<br />Одна система управления.</p>
-          <div class="plan-meter"><span></span></div>
-          <div class="plan-count">
-            <span>68 420 отправлено</span><span>74%</span>
-          </div>
-        </div>
-        <button class="nav-item help" id="help">
-          <span data-icon="help"></span><span>Помощь и поддержка</span>
-        </button>
         <button class="profile" id="profile">
           <span class="avatar">АД</span
-          ><span><strong>Администратор</strong><small>Мой аккаунт</small></span
+          ><span><strong>Администратор</strong><small>Выйти</small></span
           ><span data-icon="chevrons"></span>
         </button>
       </div>
@@ -60,25 +39,19 @@
             class="icon-button mobile-menu"
             id="mobile-menu"
             aria-label="Открыть меню"
+            aria-expanded="false"
+            aria-controls="sidebar"
           >
             <span data-icon="menu"></span></button
-          ><span>Nalog Project</span><span class="breadcrumb-slash">/</span
-          ><strong id="breadcrumb-page">Обзор</strong>
+          ><span>Рабочее пространство</span
+          ><span class="breadcrumb-slash">/</span
+          ><strong id="breadcrumb-page">Рассылки</strong>
         </div>
         <div class="topbar-actions">
-          <span class="demo-label">Демо-пространство</span
-          ><span class="topbar-divider"></span
-          ><button
-            class="icon-button"
-            id="notifications"
-            aria-label="Уведомления"
-          >
-            <span data-icon="bell"></span
-            ><span class="notification-dot"></span></button
-          ><button
+          <button
             class="small-avatar"
             id="account"
-            aria-label="Настройки аккаунта"
+            aria-label="Аккаунт администратора"
           >
             АД
           </button>
@@ -86,9 +59,44 @@
       </header>
       <main id="main" tabindex="-1"></main>
       <footer>
-        <span>© 2026 Pulse. Каждое сообщение имеет значение.</span
-        ><span><i class="status-dot"></i>Интерфейс в деморежиме</span>
+        <span>Uved.kz · WhatsApp-рассылки</span
+        ><span><i class="status-dot"></i>Автообновление каждые 10 секунд</span>
       </footer>
+    </div>
+    <div class="login" id="login" hidden>
+      <form class="login-card" id="login-form">
+        <a class="brand" href="#campaigns"
+          ><img src="/favicon.svg" alt="" width="35" height="35" /><span
+            >Uved<span class="brand-period">.kz</span></span
+          ></a
+        >
+        <h1>С возвращением</h1>
+        <p>Войдите, чтобы подключить номер, загрузить базу и запустить рассылку.</p>
+        <div class="field">
+          <label for="login-name">Логин</label>
+          <input
+            id="login-name"
+            name="login"
+            type="text"
+            autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
+            required
+          />
+        </div>
+        <div class="field">
+          <label for="login-password">Пароль</label>
+          <input
+            id="login-password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <div class="error-text" id="login-error" role="alert"></div>
+        <button type="submit" class="button primary">Войти</button>
+      </form>
     </div>
     <dialog id="dialog"><div id="dialog-content"></div></dialog>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>

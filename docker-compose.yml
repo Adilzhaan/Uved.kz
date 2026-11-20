@@ -1,0 +1,16 @@
+services:
+  pulse:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+    ports:
+      # наружу сервис отдаёт reverse proxy с HTTPS (см. README), поэтому слушаем только localhost
+      - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
+    volumes:
+      - pulse-data:/data
+    stop_grace_period: 15s
+
+volumes:
+  pulse-data:

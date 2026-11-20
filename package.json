@@ -1,11 +1,25 @@
 {
-  "name": "pulse-mail",
-  "version": "1.0.0",
+  "name": "pulse-whatsapp",
+  "version": "2.0.0",
   "private": true,
-  "description": "Pulse — интерфейс управления email-рассылками",
+  "description": "Pulse — сервис массовой WhatsApp-рассылки через GREEN-API",
+  "engines": { "node": ">=20" },
   "scripts": {
-    "dev": "node server.mjs",
-    "start": "node server.mjs",
-    "check": "node --check dist/app.js && node --check server.mjs"
+    "start": "node src/server.js",
+    "dev": "node --env-file=.env src/server.js",
+    "mock": "node test/mock-green.js",
+    "gen": "node test/gen-xlsx.js",
+    "test": "node test/run.js",
+    "check": "for f in src/*.js test/*.js dist/app.js; do node --check $f || exit 1; done"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2",
+    "multer": "^2.0.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
   }
 }

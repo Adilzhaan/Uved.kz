@@ -1,26 +1,18 @@
 "use strict";
 const paths = {
-  grid: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
   send: "m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13",
   users:
     "M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M16 3a4 4 0 0 1 0 8 M22 21v-2a4 4 0 0 0-3-3.87 M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0",
-  template: "M4 3h16v18H4z M4 9h16 M10 9v12",
-  chart: "M4 3v18h17 M9 16v-5 M14 16V6 M19 16v-8",
-  settings:
-    "M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1 1-3Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
   mail: "M3 5h18v14H3z m0 1 9 7 9-7",
   check: "m5 12 4 4L19 6",
   checkCircle: "M22 11.1V12a10 10 0 1 1-5.9-9.14 M22 4 12 14l-3-3",
   eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
-  click: "m4 3 7 18 3-7 7-3L4 3Z m10 11 6 6",
   chevrons: "m9 8 3-3 3 3 m-6 8 3 3 3-3",
-  down: "m6 9 6 6 6-6",
   left: "m14 6-6 6 6 6",
   right: "m10 6 6 6-6 6",
   zap: "m13 2-9 12h7l-1 8 10-12h-7l1-8Z",
   bell: "M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9 M10 21h4",
   help: "M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0 M9 9a3 3 0 0 1 6 0c0 2-3 2-3 4 M12 17h.01",
-  calendar: "M4 5h16v16H4z M16 3v4 M8 3v4 M4 11h16",
   plus: "M12 5v14 M5 12h14",
   download: "M12 3v12 m-5-5 5 5 5-5 M5 16v5h14v-5",
   upload: "M12 16V3 m-5 5 5-5 5 5 M4 16v5h16v-5",
@@ -32,9 +24,20 @@ const paths = {
   clock: "M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0 M12 6v6l4 2",
   pause: "M8 5v14 M16 5v14",
   play: "m7 4 14 8-14 8V4Z",
+  stop: "M6 6h12v12H6z",
   copy: "M9 9h12v12H9z M5 15H3V3h12v2",
   file: "M14 2H4v20h16V8l-6-6Z M14 2v6h6 M8 13h8 M8 17h6",
   logout: "M9 3H3v18h6 M10 12h12 m-5-5 5 5-5 5",
+  phone:
+    "M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z",
+  database:
+    "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Z M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6 M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6",
+  message: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z",
+  list: "M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01",
+  trash: "M3 6h18 M8 6V4h8v2 M6 6l1 15h10l1-15",
+  refresh: "M21 12a9 9 0 1 1-3-6.7L21 8 M21 3v5h-5",
+  qr: "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h3v3h-3z M20 14v.01 M14 20v.01 M20 20v.01 M17 17h4",
+  edit: "M4 20h4L19 9l-4-4L4 16v4Z M13 7l4 4",
 };
 const icon = (name) =>
   `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${paths[name] || paths.mail}"/></svg>`;
@@ -50,135 +53,81 @@ const esc = (s) =>
         c
       ],
   );
-const num = (n) => Number(n).toLocaleString("ru-RU");
-const date = (s) =>
-  new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    timeZone: "Asia/Almaty",
-  }).format(new Date(s));
-const seed = [
-  {
-    id: "c1",
-    name: "Ноябрьский дайджест",
-    subject: "Всё важное за ноябрь — в одном письме",
-    segment: "Все подписчики",
-    status: "running",
-    total: 24500,
-    sent: 18620,
-    opens: 43.2,
-    clicks: 5.8,
-    date: "2026-11-20T04:00:00Z",
-    color: "",
-    body: "Здравствуйте, {{name}}!\n\nСобрали для вас главные новости, полезные материалы и обновления этого месяца. Спасибо, что остаётесь с нами!\n\nКоманда Nalog Project",
-  },
-  {
-    id: "c2",
-    name: "Важное обновление сервиса",
-    subject: "Ваше рабочее пространство стало удобнее",
-    segment: "Активные пользователи",
-    status: "done",
-    total: 28400,
-    sent: 28400,
-    opens: 48.6,
-    clicks: 7.2,
-    date: "2026-11-19T04:00:00Z",
-    color: "lilac",
-    body: "Здравствуйте, {{name}}!\n\nМы подготовили обновление сервиса. Уже сейчас вы можете попробовать новые функции в личном кабинете.",
-  },
-  {
-    id: "c3",
-    name: "Напоминание об оплате",
-    subject: "Напоминаем о предстоящей оплате",
-    segment: "Клиенты с подпиской",
-    status: "scheduled",
-    total: 12500,
-    sent: 0,
-    opens: 0,
-    clicks: 0,
-    date: "2026-11-21T04:00:00Z",
-    color: "peach",
-    body: "Здравствуйте, {{name}}!\n\nПриближается дата очередной оплаты. Подробности доступны в вашем личном кабинете.",
-  },
-  {
-    id: "c4",
-    name: "Добро пожаловать в Nalog",
-    subject: "Рады видеть вас в Nalog Project",
-    segment: "Новые подписчики",
-    status: "done",
-    total: 21400,
-    sent: 21400,
-    opens: 54.3,
-    clicks: 9.1,
-    date: "2026-11-18T04:00:00Z",
-    color: "blue",
-    body: "Здравствуйте, {{name}}!\n\nДобро пожаловать! Мы подготовили всё, чтобы вам было легко начать. Познакомьтесь с возможностями сервиса в вашем личном кабинете.",
-  },
-  {
-    id: "c5",
-    name: "Декабрь: планы и обновления",
-    subject: "Что вас ждёт в декабре",
-    segment: "Все подписчики",
-    status: "draft",
-    total: 5200,
-    sent: 0,
-    opens: 0,
-    clicks: 0,
-    date: "2026-11-20T05:00:00Z",
-    color: "lilac",
-    body: "Здравствуйте, {{name}}!\n\nРассказываем о планах на следующий месяц.",
-  },
-];
-const defaultSettings = {
-  workspace: "Nalog Project",
-  sender: "Команда Nalog",
-  email: "hello@example.com",
-  reply: "support@example.com",
-  timezone: "Asia/Almaty",
-};
-function read(key, fallback) {
-  try {
-    const value = JSON.parse(localStorage.getItem(key));
-    return value ?? fallback;
-  } catch {
-    return fallback;
+const num = (n) => Number(n || 0).toLocaleString("ru-RU");
+let tz = "Asia/Almaty";
+const dateTime = (ts) =>
+  ts
+    ? new Intl.DateTimeFormat("ru-RU", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: tz,
+      }).format(new Date(ts))
+    : "—";
+const phoneFmt = (p) => (p ? "+" + esc(p) : "—");
+
+/* ───────── API ───────── */
+let me = null;
+async function api(path, options = {}) {
+  const init = { method: options.method || "GET", headers: {} };
+  if (options.form) init.body = options.form;
+  else if (options.body !== undefined) {
+    init.headers["Content-Type"] = "application/json";
+    init.body = JSON.stringify(options.body);
   }
+  if (init.method === "GET" && !options.method && init.body)
+    init.method = "POST";
+  const res = await fetch("/api" + path, init);
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && path !== "/login") {
+    showLogin();
+    throw new Error("Требуется вход");
+  }
+  if (!res.ok) throw new Error(data.error || `Ошибка ${res.status}`);
+  return data;
 }
-let campaigns = read("pulse.campaigns.v1", seed);
-if (
-  !Array.isArray(campaigns) ||
-  campaigns.some((c) => !c || !c.id || !c.name || typeof c.sent !== "number")
-)
-  campaigns = structuredClone(seed);
-let contacts = read("pulse.contacts.v1", []);
-if (
-  !Array.isArray(contacts) ||
-  contacts.some((c) => !c || typeof c.email !== "string")
-)
-  contacts = [];
-let settings = { ...defaultSettings, ...read("pulse.settings.v1", {}) };
-let page = "overview",
-  filter = "all",
-  query = "",
-  period = "week",
-  currentPage = 1,
-  contactQuery = "";
+const post = (path, body = {}) => api(path, { method: "POST", body });
+
 const navigation = [
-  ["overview", "grid", "Обзор"],
   ["campaigns", "send", "Рассылки"],
-  ["audience", "users", "Аудитория"],
-  ["templates", "template", "Шаблоны"],
-  ["analytics", "chart", "Аналитика"],
-  ["settings", "settings", "Настройки"],
+  ["numbers", "phone", "WhatsApp-номера"],
+  ["base", "database", "База для рассылки"],
+  ["templates", "copy", "Шаблоны"],
 ];
-const statuses = {
-  running: ["Отправляется", "running"],
-  done: ["Завершена", "done"],
-  scheduled: ["Запланирована", "scheduled"],
-  draft: ["Черновик", ""],
-  paused: ["На паузе", "paused"],
+const data = {
+  campaigns: [],
+  instances: [],
+  lists: [],
+  templates: [],
+  overview: {},
 };
+let page = "campaigns",
+  formDraft = null, // значения формы рассылки, пока пользователь загружает базу
+  dialogState = null,
+  qrTimer = null,
+  loaded = false;
+const instanceStates = {
+  authorized: ["Подключён", "done"],
+  notAuthorized: ["Не подключён", "paused"],
+  blocked: ["Заблокирован", "failed"],
+  yellowCard: ["Жёлтая карточка", "failed"],
+  starting: ["Запускается", "scheduled"],
+  sleepMode: ["Спящий режим", "paused"],
+  unknown: ["Неизвестно", ""],
+};
+const campaignStatuses = {
+  draft: ["Черновик", ""],
+  running: ["Отправляется", "running"],
+  paused: ["На паузе", "paused"],
+  finished: ["Завершена", "done"],
+  stopped: ["Остановлена", "stopped"],
+};
+const badge = (map, key) => {
+  const s = map[key] || [key || "—", ""];
+  return `<span class="badge ${s[1]}"><i></i>${esc(s[0])}</span>`;
+};
+
 let toastTimer;
 function toast(message) {
   $("#toast").textContent = message;
@@ -186,691 +135,808 @@ function toast(message) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => $("#toast").classList.remove("visible"), 4200);
 }
-function persist(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch {
-    toast(
-      "Не удалось сохранить: хранилище браузера недоступно или переполнено.",
-    );
-    return false;
-  }
+const fail = (e) => toast(e.message || "Что-то пошло не так");
+
+function button(text, ic, act, cls = "", attrs = "") {
+  return `<button type="button" class="button ${cls}" data-act="${act}" ${attrs}>${ic ? icon(ic) : ""}${text}</button>`;
 }
-function saveCampaigns() {
-  return persist("pulse.campaigns.v1", campaigns);
-}
-function badge(status) {
-  const s = statuses[status] || statuses.draft;
-  return `<span class="badge ${s[1]}"><i></i>${s[0]}</span>`;
-}
-function button(text, ic, action, cls = "") {
-  return `<button class="button ${cls}" data-action="${action}">${ic ? icon(ic) : ""}${text}</button>`;
-}
-function heading(
-  title,
-  subtitle,
-  actions = "",
-  eyebrow = "РАБОЧЕЕ ПРОСТРАНСТВО",
-) {
+function heading(title, subtitle, actions = "", eyebrow = "") {
   return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${subtitle}</p></div><div class="heading-actions">${actions}</div></div>`;
 }
-function metrics() {
-  const values = [
-    ["Отправлено сообщений", "68 420", "send", "12,8%", "за прошлый период"],
-    ["Доставлено", "98,2%", "checkCircle", "1,4%", "за прошлый период"],
-    ["Открываемость", "42,8%", "eye", "5,2%", "за прошлый период"],
-    ["Переходы по ссылкам", "6,4%", "click", "0,8%", "за прошлый период"],
+
+const empty = (ic, title, text) =>
+  `<div class="empty">${icon(ic)}${title}<p>${text}</p></div>`;
+/* ───────── Рассылки ───────── */
+const isReady = (i) => i.enabled && i.state === "authorized";
+function stepsBlock() {
+  const o = data.overview;
+  const steps = [
+    [o.instances_active > 0, "phone", "Подключите номер", "Отсканируйте QR-код в WhatsApp на телефоне — так же, как при входе в WhatsApp Web.", "Подключить номер", "connect-number"],
+    [o.contacts > 0, "database", "Загрузите базу", "Файл Excel, CSV или ссылка на Google Таблицу. Нужна только колонка с телефонами.", "Загрузить базу", "import"],
+    [o.campaigns_started > 0, "send", "Запустите рассылку", "Выберите готовый шаблон или напишите свой текст и нажмите «Запустить».", "Новая рассылка", "campaign-new"],
   ];
-  return `<div class="metrics">${values.map((m, i) => `<article class="metric"><div class="metric-label">${m[0]}<span class="metric-icon">${icon(m[2])}</span></div><div class="metric-value">${m[1]}</div><div class="metric-bottom"><span class="delta">↗ ${m[3]}</span><span>${m[4]}</span></div><svg class="metric-spark" viewBox="0 0 70 35" fill="none" aria-hidden="true"><path d="M1 28 9 22 17 25 25 16 33 20 41 10 49 15 57 5 69 3" stroke="${["#a9c88b", "#8db7a0", "#b0a2d2", "#d6ba84"][i]}" stroke-width="1.5"/></svg></article>`).join("")}</div>`;
-}
-function chart() {
-  const monthly = period === "month";
-  const labels = monthly
-    ? ["01 ноя", "05 ноя", "10 ноя", "15 ноя", "20 ноя", "25 ноя", "30 ноя"]
-    : ["14 ноя", "15 ноя", "16 ноя", "17 ноя", "18 ноя", "19 ноя", "20 ноя"];
-  const line = monthly
-    ? "M35 130 C70 120 83 110 122 115 S180 45 209 65 S270 120 296 70 S351 95 383 40 S440 65 470 30 S528 45 557 16"
-    : "M35 127 C65 129 87 119 122 109 S180 122 209 90 S266 108 296 77 S347 70 383 81 S435 64 470 49 S530 66 557 21";
-  return `<section class="panel activity-panel"><div class="panel-heading"><div><h2>Активность рассылок</h2><p>Сообщения, которые находят отклик</p></div><div class="segmented" aria-label="Период графика"><button data-period="week" class="${!monthly ? "selected" : ""}" aria-pressed="${!monthly}">Неделя</button><button data-period="month" class="${monthly ? "selected" : ""}" aria-pressed="${monthly}">Месяц</button></div></div><div class="chart-legend"><span class="legend-entry"><i class="legend-dot"></i>Отправлено</span><span class="legend-entry"><i class="legend-dot purple"></i>Открыто</span></div><div class="chart-wrap"><svg class="chart" viewBox="0 0 580 185" role="img" aria-label="Демонстрационная динамика отправок и открытий за ${monthly ? "ноябрь" : "14–20 ноября"}"><defs><linearGradient id="areaFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#dceccd" stop-opacity=".7"/><stop offset="100%" stop-color="#f8fbf5" stop-opacity=".2"/></linearGradient></defs>${[20, 60, 100, 140].map((y, i) => `<line class="gridline" x1="35" x2="557" y1="${y}" y2="${y}"/><text x="0" y="${y + 3}">${[15, 10, 5, 0][i]}${i < 3 ? " тыс." : ""}</text>`).join("")}<path class="area" d="${line} L557 140 L35 140 Z"/><path class="sent-line" d="${line}"/><path class="open-line" d="${monthly ? "M35 137 C80 138 90 124 122 130 S177 97 209 111 S262 132 296 113 S351 126 383 89 S435 103 470 83 S529 97 557 68" : "M35 139 C70 138 90 133 122 133 S176 132 209 119 S261 126 296 111 S351 108 383 112 S433 98 470 96 S527 102 557 80"}"/>${labels.map((l, i) => `<text x="${35 + i * 87}" y="173" text-anchor="${i === 0 ? "start" : i === 6 ? "end" : "middle"}">${l}</text>`).join("")}</svg></div></section>`;
-}
-function delivery() {
-  return `<section class="panel"><div class="panel-heading"><div><h2>Доставляемость</h2><p>Каждое сообщение под контролем</p></div></div><div class="delivery-body"><div class="donut-wrap"><svg class="donut" viewBox="0 0 146 146" role="img" aria-label="Доставлено 98,2 процента"><circle cx="73" cy="73" r="57" fill="none" stroke="#edf1e8" stroke-width="11"/><circle cx="73" cy="73" r="57" fill="none" stroke="#bedc9d" stroke-width="11" stroke-dasharray="351.69 358.14" stroke-linecap="round"/><circle cx="73" cy="73" r="57" fill="none" stroke="#cbb7db" stroke-width="11" stroke-dasharray="3.22 358.14" stroke-dashoffset="-352.5"/></svg><div class="donut-center"><strong>98,2<span style="display:inline;font-size:19px;color:inherit">%</span></strong><span>Отличный результат</span></div></div><div class="delivery-legend"><div class="delivery-line"><i class="legend-dot"></i>Доставлено<strong>67 188</strong></div><div class="delivery-line"><i class="legend-dot purple"></i>В обработке<strong>821</strong></div><div class="delivery-line"><i class="legend-dot" style="background:#e8d5b1"></i>Не доставлено<strong>411</strong></div></div></div></section>`;
-}
-function filteredCampaigns() {
-  return campaigns.filter(
-    (c) =>
-      (filter === "all" ||
-        (filter === "active"
-          ? ["running", "paused", "scheduled"].includes(c.status)
-          : c.status === filter)) &&
-      `${c.name} ${c.subject} ${c.segment}`
-        .toLowerCase()
-        .includes(query.toLowerCase()),
-  );
-}
-function campaignTable() {
-  const rows = filteredCampaigns();
-  const max = Math.max(1, Math.ceil(rows.length / 5));
-  currentPage = Math.min(currentPage, max);
-  const slice = rows.slice((currentPage - 1) * 5, currentPage * 5);
-  return `<div class="table-scroll"><table><thead><tr><th>Название рассылки</th><th>Статус</th><th>Получатели</th><th>Прогресс</th><th>Открытия</th><th>Дата</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${slice.length ? slice.map((c) => `<tr><td><button class="campaign-name" data-detail="${esc(c.id)}"><span class="mail-tile ${esc(c.color)}">${icon("mail")}</span><span style="text-align:left"><strong>${esc(c.name)}</strong><small>${esc(c.segment)}</small></span></button></td><td>${badge(c.status)}</td><td>${num(c.total)}</td><td><span class="progress-cell"><strong>${c.total ? Math.round((c.sent / c.total) * 100) : 0}%</strong><span class="mini-progress"><span style="width:${c.total ? Math.min(100, (c.sent / c.total) * 100) : 0}%"></span></span></span></td><td>${c.sent ? c.opens.toLocaleString("ru-RU") + "%" : "—"}</td><td>${date(c.date).replace(" 2026 г.", "")}</td><td><button class="icon-button table-more" data-detail="${esc(c.id)}" aria-label="Открыть рассылку ${esc(c.name)}">${icon("more")}</button></td></tr>`).join("") : `<tr><td colspan="7"><div class="empty">${icon("search")}Рассылки не найдены<p>Попробуйте изменить запрос или создайте новую рассылку.</p></div></td></tr>`}</tbody></table></div><div class="table-footer"><span>${rows.length ? `Показано ${(currentPage - 1) * 5 + 1}–${Math.min(currentPage * 5, rows.length)} из ${rows.length} рассылок` : "Нет рассылок"}</span><div class="pagination"><button data-paginate="${currentPage - 1}" ${currentPage === 1 ? "disabled" : ""} aria-label="Предыдущая страница">${icon("left")}</button><button class="current" aria-current="page">${currentPage}</button><button data-paginate="${currentPage + 1}" ${currentPage === max ? "disabled" : ""} aria-label="Следующая страница">${icon("right")}</button></div></div>`;
-}
-function campaignPanel() {
-  return `<section class="panel campaign-panel"><div class="panel-heading"><h2>${page === "overview" ? "Последние рассылки" : "Все рассылки"}</h2>${page === "overview" ? button("Все рассылки", null, "go-campaigns", "text") : button("Экспорт CSV", "download", "export", "text")}</div><div class="campaign-controls"><div class="tabs" role="group" aria-label="Фильтр рассылок">${[
-    ["all", "Все рассылки"],
-    ["active", "Активные"],
-    ["done", "Завершённые"],
-    ["draft", "Черновики"],
-  ]
+  if (steps.every((x) => x[0])) return "";
+  const next = steps.findIndex((x) => !x[0]);
+  return `<section class="steps" aria-label="Быстрый старт">${steps
     .map(
-      ([f, label]) =>
-        `<button class="tab ${filter === f ? "active" : ""}" data-filter="${f}" aria-pressed="${filter === f}">${label}${f === "all" ? `<span>${campaigns.length}</span>` : ""}</button>`,
+      ([done, ic, title, text, label, act], i) =>
+        `<article class="panel step ${done ? "done" : i === next ? "next" : ""}"><div class="step-top"><span class="mail-tile">${icon(done ? "check" : ic)}</span><span class="step-no">Шаг ${i + 1} из 3</span></div><h3>${title}</h3><p>${text}</p>${done ? '<span class="badge done"><i></i>Готово</span>' : button(label, null, act, i === next ? "primary" : "")}</article>`,
     )
-    .join(
-      "",
-    )}</div><label class="search">${icon("search")}<input id="campaign-search" placeholder="Найти рассылку..." aria-label="Найти рассылку" value="${esc(query)}"/></label></div><div id="campaign-table">${campaignTable()}</div></section>`;
+    .join("")}</section>`;
 }
-function overview() {
+const listName = (c) =>
+  c.list_id === null
+    ? "Все контакты"
+    : data.lists.find((l) => l.id === c.list_id)?.name || "База удалена";
+const donePercent = (st) =>
+  st.total ? Math.floor(((st.total - st.queue) / st.total) * 100) : 0;
+function campaignsPage() {
+  const rows = data.campaigns;
   return (
     heading(
-      "Всё начинается с сообщения",
-      "Ваши рассылки, аудитория и результаты — в одном месте.",
-      button("14–20 ноября 2026", "calendar", "date") +
-        button("Создать рассылку", "plus", "create", "primary"),
+      "Рассылки",
+      "Подключите номер, загрузите базу и запустите — остальное система сделает сама.",
+      button("Новая рассылка", "plus", "campaign-new", "primary"),
     ) +
-    `<section class="launch-banner"><div class="banner-copy"><div class="eyebrow">БОЛЬШЕ ОХВАТ. БЛИЖЕ К АУДИТОРИИ.</div><h2>Большие рассылки. Легко.</h2><p>Всё готово для вашего следующего большого запуска.</p></div><div class="banner-side"><div class="banner-mail">${icon("send")}</div><div class="banner-volume"><strong>92 000</strong><span>сообщений в вашем плане</span></div></div></section>` +
-    metrics() +
-    `<div class="content-grid" id="overview-charts">${chart()}${delivery()}</div>` +
-    campaignPanel() +
-    `<div class="bottom-note">${icon("shield")}Ваши идеи заслуживают быть услышанными. Мы поможем им добраться до адресата.</div>`
+    stepsBlock() +
+    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Мои рассылки <span class="section-count">${rows.length}</span></h2><span class="section-caption">Сегодня отправлено: ${num(data.overview.sent_today)}</span></div>${
+      rows.length
+        ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название</th><th>Статус</th><th>Отправлено</th><th>Ответили</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows
+            .map((c) => {
+              const st = c.stats;
+              return `<tr><td><button class="campaign-name" data-act="campaign-open" data-id="${c.id}"><span class="mail-tile">${icon("send")}</span><span style="text-align:left"><strong>${esc(c.name)}</strong><small>${esc(listName(c))}</small></span></button></td><td data-label="Статус">${badge(campaignStatuses, c.status)}</td><td data-label="Отправлено">${c.status === "draft" ? '<span class="muted">ещё не запускалась</span>' : `<span class="progress-cell"><strong>${num(st.sent)} из ${num(st.total)}</strong><span class="mini-progress"><span style="width:${donePercent(st)}%"></span></span></span>`}</td><td data-label="Ответили">${st.sent ? num(st.replied) : "—"}</td><td class="connection-actions"><div class="row-actions">${button("Открыть", null, "campaign-open", "compact", `data-id="${c.id}"`)}</div></td></tr>`;
+            })
+            .join("")}</tbody></table></div>`
+        : empty("send", "Рассылок пока нет", "Нажмите «Новая рассылка» — это займёт пару минут.")
+    }</section><p class="page-note">${icon("shield")}Система сама делает паузы между сообщениями, соблюдает дневные лимиты и не пишет тем, кто ответил «СТОП».</p>`
   );
 }
-function audience() {
+function campaignForm(existing = null, copy = false, preset = null) {
+  const ready = data.instances.filter(isReady);
+  const c = {
+    name: `Рассылка ${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: tz }).format(new Date())}`,
+    text: "",
+    list_id: data.lists[0]?.id ?? null,
+    instance_ids: (ready.length ? ready : data.instances.filter((i) => i.enabled)).map((i) => i.id),
+    delay_min: 25,
+    delay_max: 70,
+    hour_from: 10,
+    hour_to: 20,
+    check_wa: 0,
+    ...(existing || {}),
+    ...(preset || {}),
+  };
+  if (copy) c.name += " — копия";
+  const editId = preset?.editId ?? (existing && !copy ? existing.id : "");
+  const status = editId
+    ? data.campaigns.find((x) => x.id === Number(editId))?.status || "draft"
+    : "draft";
+  const lockList = status !== "draft";
+  const minDelay = me?.min_delay ?? 5;
+  dialogState = { kind: "form" };
+  modal(
+    editId ? "Изменить рассылку" : "Новая рассылка",
+    `<form id="campaign-form" data-edit="${editId}">
+<div class="field"><label for="c-list">1. Кому отправляем</label><div class="inline-row"><select id="c-list" name="list_id" ${lockList ? "disabled" : ""}>${data.lists.map((l) => `<option value="${l.id}" ${c.list_id === l.id ? "selected" : ""}>${esc(l.name)} — ${num(l.contacts)}</option>`).join("")}<option value="" ${c.list_id === null ? "selected" : ""}>Все контакты — ${num(data.overview.contacts)}</option></select>${lockList ? "" : button("Загрузить базу", "upload", "form-import")}</div><small>${lockList ? "После запуска базу изменить нельзя." : "Excel, CSV или Google Таблица. Отписавшиеся исключаются автоматически."}</small></div>
+<div class="field"><label for="c-text">2. Что пишем</label>${data.templates.length ? `<select id="c-template" aria-label="Вставить готовый шаблон"><option value="">Вставить готовый шаблон…</option>${data.templates.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>` : ""}<textarea id="c-text" name="text" maxlength="4000" placeholder="{Здравствуйте|Добрый день}, {name}!">${esc(c.text)}</textarea>
+<div class="hint-row"><button type="button" class="chip" data-act="insert" data-text="{name}">+ имя</button><button type="button" class="chip" data-act="insert" data-text="{Здравствуйте|Добрый день|Приветствуем}">+ варианты {a|b|c}</button><button type="button" class="chip" data-act="insert" data-text="\n\nОтветьте СТОП, чтобы отписаться.">+ «Ответьте СТОП, чтобы отписаться»</button><button type="button" class="chip" data-act="template-save">Сохранить как шаблон</button></div>
+<small>{name} подставит имя получателя, {город} — любую колонку вашей таблицы. Варианты в фигурных скобках через «|» чередуются случайно: сообщения не выглядят одинаковыми, и номер живёт дольше. Текст в [квадратных скобках] замените своим.</small></div>
+<div class="field"><label for="c-media">Картинка или файл (необязательно)</label><input type="file" id="c-media" aria-describedby="c-media-info"/><input type="hidden" name="media_url" value="${esc(c.media_url || "")}"/><input type="hidden" name="media_name" value="${esc(c.media_name || "")}"/><small id="c-media-info">${c.media_url ? `Прикреплён: ${esc(c.media_name || c.media_url)} · <button type="button" class="chip" data-act="media-clear">убрать</button>` : "Текст сообщения станет подписью к файлу."}</small></div>
+<div class="actions-row">${button("Посмотреть, как это увидят получатели", "eye", "preview")}</div><div id="preview" class="preview-list" aria-live="polite"></div>
+<details class="advanced"><summary>Дополнительные настройки</summary>
+<div class="field"><label for="c-name">Название рассылки</label><input id="c-name" name="name" value="${esc(c.name)}" maxlength="120" required/></div>
+<div class="field"><label>С каких номеров отправлять</label><div class="checks">${data.instances.map((i) => `<label class="check"><input type="checkbox" name="instance" value="${i.id}" ${c.instance_ids.includes(i.id) ? "checked" : ""}/>${esc(i.name)} <span class="muted">· до ${num(i.limit_today)} в день${i.state === "authorized" ? "" : " · не подключён"}</span></label>`).join("")}</div></div>
+<div class="form-grid"><div class="field"><label for="c-dmin">Пауза между сообщениями, сек</label><div class="form-grid"><input id="c-dmin" name="delay_min" type="number" min="${minDelay}" max="3600" value="${c.delay_min}" required aria-label="Пауза от"/><input name="delay_max" type="number" min="${minDelay}" max="7200" value="${c.delay_max}" required aria-label="Пауза до"/></div><small>Случайная, от и до.</small></div>
+<div class="field"><label for="c-hfrom">Часы отправки</label><div class="form-grid"><input id="c-hfrom" name="hour_from" type="number" min="0" max="23" value="${c.hour_from}" required aria-label="Час с"/><input name="hour_to" type="number" min="1" max="24" value="${c.hour_to}" required aria-label="Час до"/></div><small>Время ${esc(tz)}.</small></div></div>
+<div class="field" style="margin-top:17px"><label class="check"><input type="checkbox" name="check_wa" ${c.check_wa ? "checked" : ""}/>Сначала проверять, есть ли у номера WhatsApp</label></div>
+${status === "draft" ? `<div class="field"><label for="c-exclude">Не писать тем, кому уже писали за последние N дней</label><input id="c-exclude" name="exclude_recent_days" type="number" min="0" max="3650" value="${Number(c.exclude_recent_days) || 0}"/><small>0 — писать всем из базы.</small></div>` : ""}
+</details>
+</form>`,
+    status === "draft"
+      ? `<button type="submit" form="campaign-form" name="mode" value="draft" class="button">Сохранить черновик</button><button type="submit" form="campaign-form" name="mode" value="launch" class="button primary">${icon("play")}Запустить рассылку</button>`
+      : button("Отмена", null, "close") +
+          `<button type="submit" form="campaign-form" name="mode" value="draft" class="button primary">${icon("check")}Сохранить</button>`,
+  );
+}
+function readCampaignForm() {
+  const form = $("#campaign-form");
+  const f = new FormData(form);
+  return {
+    name: String(f.get("name") || "").trim(),
+    text: f.get("text"),
+    media_url: f.get("media_url") || null,
+    media_name: f.get("media_name") || null,
+    list_id: form.elements.list_id.value ? Number(form.elements.list_id.value) : null,
+    instance_ids: f.getAll("instance").map(Number),
+    delay_min: Number(f.get("delay_min")),
+    delay_max: Number(f.get("delay_max")),
+    hour_from: Number(f.get("hour_from")),
+    hour_to: Number(f.get("hour_to")),
+    check_wa: f.get("check_wa") ? 1 : 0,
+    exclude_recent_days: Number(f.get("exclude_recent_days")) || 0,
+  };
+}
+// Понятное объяснение, почему рассылка сейчас не отправляет
+function campaignHint(c) {
+  const st = c.stats;
+  if (c.status === "paused") return "Рассылка на паузе. Нажмите «Продолжить», чтобы отправка возобновилась.";
+  if (c.status !== "running" || !st.queue) return "";
+  const mine = data.instances.filter((i) => c.instance_ids.includes(i.id));
+  const ready = mine.filter(isReady);
+  if (!ready.length) {
+    const stopped = mine.find((i) => !i.enabled && i.disabled_reason);
+    return stopped
+      ? `Отправка остановлена: номер «${esc(stopped.name)}» выключен (${esc(stopped.disabled_reason)}). Проверьте его во вкладке «WhatsApp-номера».`
+      : "Отправка не идёт: номер не подключён. Подключите его во вкладке «WhatsApp-номера» — рассылка продолжится сама.";
+  }
+  const hour = Number(new Intl.DateTimeFormat("en-GB", { hour: "2-digit", hourCycle: "h23", timeZone: tz }).format(new Date())) % 24;
+  if (hour < c.hour_from || hour >= c.hour_to)
+    return `Сейчас нерабочее время. Отправка идёт с ${c.hour_from}:00 до ${c.hour_to}:00 и продолжится автоматически.`;
+  if (ready.every((i) => i.sent_today >= i.limit_today))
+    return "Дневной лимит номера на сегодня исчерпан — так мы бережём номер от блокировки. Завтра отправка продолжится сама.";
+  return st.eta_days ? `Отправка идёт. Осталось примерно ${num(st.eta_days)} дн.` : "Отправка идёт.";
+}
+function campaignDetail(id) {
+  const c = data.campaigns.find((x) => x.id === Number(id));
+  if (!c) return;
+  const st = c.stats;
+  const cells = [
+    [st.total, "получателей"],
+    [st.sent, "отправлено"],
+    [st.delivered, "доставлено"],
+    [st.read, "прочитано"],
+    [st.replied, "ответили"],
+    [st.queue, "в очереди"],
+  ];
+  const a = (text, ic, act, cls = "") => button(text, ic, act, cls, `data-id="${c.id}"`);
+  const footer =
+    c.status === "draft"
+      ? a("Удалить", "trash", "campaign-delete", "text danger-button") + a("Изменить и запустить", "play", "campaign-edit", "primary")
+      : c.status === "running"
+        ? a("Остановить совсем", "stop", "campaign-stop", "text danger-button") + a("Пауза", "pause", "campaign-pause", "primary")
+        : c.status === "paused"
+          ? a("Остановить совсем", "stop", "campaign-stop", "text danger-button") + a("Изменить текст", "edit", "campaign-edit") + a("Продолжить", "play", "campaign-resume", "primary")
+          : a("Удалить", "trash", "campaign-delete", "text danger-button") + (st.failed ? a("Повторить ошибки", "refresh", "campaign-retry") : "") + a("Повторить рассылку", "copy", "campaign-copy", "primary");
+  const hint = campaignHint(c);
+  const extra = [
+    st.failed ? `ошибок: ${num(st.failed)}` : "",
+    st.no_wa ? `нет WhatsApp: ${num(st.no_wa)}` : "",
+    st.skipped ? `пропущено: ${num(st.skipped)}` : "",
+  ].filter(Boolean).join(" · ");
+  dialogState = { kind: "campaign", id: c.id };
+  modal(
+    esc(c.name),
+    `${badge(campaignStatuses, c.status)} <span class="muted">${esc(listName(c))}</span>${
+      c.status === "draft"
+        ? `<div class="info-box">Это черновик — сообщения ещё не отправлялись.</div>`
+        : `<div class="stat-grid">${cells.map(([v, l]) => `<div><strong>${num(v)}</strong><small>${l}</small></div>`).join("")}</div><div class="big-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${donePercent(st)}" aria-label="Обработано"><span style="width:${donePercent(st)}%"></span></div><div class="progress-caption"><span>Обработано ${donePercent(st)}%</span><span>${extra}</span></div>${hint ? `<div class="info-box">${hint}</div>` : ""}`
+    }<div class="preview-email">${esc(c.text) || '<span class="muted">Без текста</span>'}</div>${c.status === "draft" ? "" : `<div class="actions-row" style="margin-top:16px"><a class="button compact" href="/api/campaigns/${c.id}/export.csv" download>${icon("download")}Скачать отчёт (CSV)</a></div>`}`,
+    footer,
+  );
+}
+
+/* ───────── Шаблоны ───────── */
+function templatesPage() {
   return (
     heading(
-      "Ваша аудитория",
-      "Люди, с которыми вы остаётесь на связи.",
-      button("Скачать пример CSV", "download", "sample") +
-        button("Импортировать CSV", "upload", "import", "primary"),
-      "КОНТАКТЫ И СЕГМЕНТЫ",
+      "Шаблоны",
+      "Готовые тексты: выберите подходящий, замените текст в [скобках] своим — и запускайте.",
+      button("Новый шаблон", "plus", "template-new", "primary"),
     ) +
-    `<div class="metrics"><article class="metric"><div class="metric-label">Импортированные контакты<span class="metric-icon">${icon("users")}</span></div><div class="metric-value">${num(contacts.length)}</div><div class="metric-bottom">В локальной базе этого браузера</div></article><article class="metric"><div class="metric-label">Уникальные email<span class="metric-icon">${icon("mail")}</span></div><div class="metric-value">${num(new Set(contacts.map((c) => c.email)).size)}</div><div class="metric-bottom">Без повторяющихся адресов</div></article><article class="metric"><div class="metric-label">Демо-аудитория<span class="metric-icon">${icon("users")}</span></div><div class="metric-value">92 000</div><div class="metric-bottom">Иллюстрация масштаба системы</div></article><article class="metric"><div class="metric-label">Формат импорта<span class="metric-icon">${icon("file")}</span></div><div class="metric-value">CSV</div><div class="metric-bottom">Поля: email, name, segment</div></article></div><section class="panel campaign-panel"><div class="toolbar"><label class="search">${icon("search")}<input id="contact-search" placeholder="Email, имя или сегмент" aria-label="Поиск контактов" value="${esc(contactQuery)}"/></label>${button("Экспорт контактов", "download", "export-contacts")}</div><div id="contact-table">${contactTable()}</div></section><div class="info-box">Импортированные контакты хранятся только в этом браузере. Демо-аудитория не содержит реальных адресов. Для общей базы команды потребуется подключение сервера.</div>`
+    (data.templates.length
+      ? `<div class="tpl-grid">${data.templates.map((t) => `<article class="panel tpl-card"><h3>${esc(t.name)}</h3><div class="tpl-text">${esc(t.text)}</div><div class="actions-row">${button("Использовать", "send", "template-use", "primary compact", `data-id="${t.id}"`)}${button("Изменить", "edit", "template-edit", "compact", `data-id="${t.id}"`)}${button("Удалить", "trash", "template-delete", "text danger-button compact", `data-id="${t.id}"`)}</div></article>`).join("")}</div>`
+      : `<section class="panel">${empty("copy", "Шаблонов пока нет", "Сохраните удачный текст, чтобы не набирать его заново.")}</section>`)
   );
 }
-function contactTable() {
-  const filtered = contacts.filter((c) =>
-    `${c.email} ${c.name} ${c.segment}`
-      .toLowerCase()
-      .includes(contactQuery.toLowerCase()),
+function templateForm(t = null) {
+  dialogState = { kind: "form" };
+  modal(
+    t ? "Изменить шаблон" : "Новый шаблон",
+    `<form id="template-form" data-id="${t?.id || ""}"><div class="field"><label for="t-name">Название</label><input id="t-name" name="name" value="${esc(t?.name || "")}" maxlength="120" required placeholder="Например, приглашение на акцию"/></div><div class="field"><label for="c-text">Текст</label><textarea id="c-text" name="text" maxlength="4000" required placeholder="{Здравствуйте|Добрый день}, {name}!">${esc(t?.text || "")}</textarea><div class="hint-row"><button type="button" class="chip" data-act="insert" data-text="{name}">+ имя</button><button type="button" class="chip" data-act="insert" data-text="{Здравствуйте|Добрый день|Приветствуем}">+ варианты {a|b|c}</button><button type="button" class="chip" data-act="insert" data-text="\n\nОтветьте СТОП, чтобы отписаться.">+ «Ответьте СТОП, чтобы отписаться»</button></div></div></form>`,
+    button("Отмена", null, "close") +
+      `<button type="submit" form="template-form" class="button primary">${icon("check")}Сохранить</button>`,
   );
-  return filtered.length
-    ? `<div class="table-scroll"><table><thead><tr><th>Имя</th><th>Email</th><th>Сегмент</th><th>Статус</th></tr></thead><tbody>${filtered
-        .slice(0, 100)
-        .map(
-          (c) =>
-            `<tr><td>${esc(c.name || "Без имени")}</td><td>${esc(c.email)}</td><td>${esc(c.segment || "Без сегмента")}</td><td><span class="badge done">Импортирован</span></td></tr>`,
-        )
-        .join(
-          "",
-        )}</tbody></table></div><div class="table-footer">Показано ${Math.min(filtered.length, 100)} из ${num(filtered.length)} контактов</div>`
-    : `<div class="empty">${icon("users")}${contactQuery ? "Контакты не найдены" : "Познакомимся с вашей аудиторией"}<p>${contactQuery ? "Попробуйте другой поисковый запрос." : "Импортируйте CSV-файл с email-адресами, чтобы создать первую базу."}</p>${!contactQuery ? `<div style="margin-top:20px">${button("Импортировать контакты", "upload", "import", "primary")}</div>` : ""}</div>`;
 }
-const templates = [
-  {
-    name: "Новости и дайджест",
-    description:
-      "Главные новости и полезные материалы в одном аккуратном письме.",
-    title: "Самое важное —\nдля вас",
-    color: "#edf3e5",
-    subject: "Главные новости этого месяца",
-    body: "Здравствуйте, {{name}}!\n\nДелимся важными новостями и полезными материалами.\n\nДобавьте сюда новости вашей компании.\n\nС теплом, команда Nalog Project",
-  },
-  {
-    name: "Сервисное уведомление",
-    description: "Важные обновления сервиса. Просто, понятно и по делу.",
-    title: "Стало ещё\nудобнее",
-    color: "#f0edf7",
-    subject: "Важное обновление сервиса",
-    body: "Здравствуйте, {{name}}!\n\nУ нас есть важное обновление для вас.\n\nОпишите изменение и необходимые действия.\n\nКоманда Nalog Project",
-  },
-  {
-    name: "Приветственное письмо",
-    description: "Тёплое знакомство и первые шаги для новых подписчиков.",
-    title: "Рады, что\nвы с нами.",
-    color: "#f6f0e6",
-    subject: "Добро пожаловать!",
-    body: "Здравствуйте, {{name}}!\n\nРады приветствовать вас! Благодарим за регистрацию.\n\nРасскажите о следующих шагах для нового пользователя.\n\nКоманда Nalog Project",
-  },
-];
-function templatePage() {
+
+function numbersPage() {
+  const rows = data.instances;
   return (
     heading(
-      "Хорошие письма начинаются здесь",
-      "Выберите основу и добавьте то, что важно вашей аудитории.",
-      button("Пустое письмо", "plus", "create", "primary"),
-      "БИБЛИОТЕКА ШАБЛОНОВ",
+      "WhatsApp-номера",
+      "Подключите номера, с которых будете отправлять сообщения.",
+      button("Подключить номер", "plus", "connect-number", "primary"),
     ) +
-    `<div class="section-grid">${templates.map((t, i) => `<article class="panel template"><div class="template-preview" style="background:${t.color}"><div class="template-sheet"><div class="mini-brand">nalog<span style="color:#99bb6d">.</span></div><div class="mini-title">${esc(t.title).replace("\n", "<br>")}</div><div class="mini-line"></div><div class="mini-line" style="width:80%"></div><div class="mini-button"></div></div></div><h3>${t.name}</h3><p>${t.description}</p><button class="button" data-template="${i}">${icon("copy")}Использовать шаблон</button></article>`).join("")}</div>`
+    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Мои номера <span class="section-count">${rows.length}</span></h2><span class="section-caption">${rows.filter((i) => i.state === "authorized").length} подключено</span></div>${rows.length ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название</th><th>Номер телефона</th><th>Подключение</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows.map((i) => `<tr><td><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span class="mail-tile">${icon("phone")}</span><strong>${esc(i.name)}</strong></button></td><td data-label="Телефон">${i.phone ? phoneFmt(i.phone) : '<span class="muted">Ждёт подключения</span>'}</td><td data-label="Статус">${badge(instanceStates, i.state)}</td><td class="connection-actions"><div class="row-actions">${i.state === "authorized" ? button("Управление", null, "instance-open", "compact", `data-id="${i.id}"`) : button("Подключить по QR", "qr", "instance-qr", "primary compact", `data-id="${i.id}"`)}</div></td></tr>`).join("")}</tbody></table></div>` : empty("phone", "Подключите первый номер", "Нажмите «Подключить номер» и наведите камеру телефона на код на экране. Номеров можно подключить несколько.")}</section><p class="page-note">${icon("qr")}Можно подключить несколько номеров — рассылка распределится между ними сама, и пойдёт быстрее.</p><p class="page-note"><button type="button" class="link-button" data-act="instance-new">Добавить подключение GREEN-API вручную (для администратора)</button></p>`
   );
 }
-function analytics() {
+function basePage() {
+  const rows = data.lists;
   return (
     heading(
-      "За цифрами — живой отклик",
-      "Демонстрационные показатели за 14–20 ноября 2026.",
-      button("Выгрузить отчёт", "download", "export", "primary"),
-      "АНАЛИТИКА РАССЫЛОК",
+      "База для рассылки",
+      "Загружайте контакты из Excel, CSV или Google Таблиц. Дубли удалим автоматически.",
+      button("Загрузить базу", "upload", "import", "primary"),
     ) +
-    metrics() +
-    `<div class="content-grid" id="overview-charts">${chart()}${delivery()}</div><div class="analytics-grid"><section class="panel"><div class="panel-heading"><h2>Открываемость по кампаниям</h2></div><div class="bar-chart">${campaigns
-      .filter((c) => c.sent)
-      .map(
-        (c) =>
-          `<div><div class="bar-label"><span>${esc(c.name)}</span><strong>${c.opens.toLocaleString("ru-RU")}%</strong></div><div class="bar-track"><span style="width:${c.opens}%"></span></div></div>`,
-      )
-      .join(
-        "",
-      )}</div></section><section class="panel"><div class="panel-heading"><h2>Путь сообщения</h2></div><div class="bar-chart">${[
-      ["Отправлено", 68420, 100],
-      ["Доставлено", 67188, 98.2],
-      ["Открыто", 28756, 42.8],
-      ["Перешли по ссылке", 4300, 6.4],
-    ]
-      .map(
-        ([name, n, w]) =>
-          `<div><div class="bar-label"><span>${name}</span><strong>${num(n)}</strong></div><div class="bar-track"><span style="width:${w}%;background:#${w > 50 ? "b5d495" : "c1b4df"}"></span></div></div>`,
-      )
-      .join("")}</div></section></div>`
+    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Загруженные базы <span class="section-count">${rows.length}</span></h2><span class="section-caption">${num(data.overview.contacts)} уникальных контактов</span></div>${rows.length ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название базы</th><th>Контактов</th><th>Дата загрузки</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows.map((l) => `<tr><td><span class="campaign-name"><span class="mail-tile">${icon("file")}</span><strong>${esc(l.name)}</strong></span></td><td data-label="Контактов">${num(l.contacts)}</td><td data-label="Загружена">${dateTime(l.created_at)}</td><td class="connection-actions">${button("Удалить", "trash", "list-delete", "text danger-button", `data-id="${l.id}"`)}</td></tr>`).join("")}</tbody></table></div>` : empty("database", "Добавьте базу получателей", "Загрузите файл с номерами телефонов. Имена и другие данные о контактах сохранятся вместе с базой.")}</section><p class="page-note">${icon("file")}XLSX, CSV или ссылка на Google Таблицу · колонка с телефоном определяется автоматически.</p>`
   );
 }
-function settingsPage() {
-  return (
-    heading(
-      "Настроено под вас",
-      "Параметры рабочего пространства и отправителя.",
-      "",
-      "НАСТРОЙКИ",
-    ) +
-    `<form id="settings-form" class="panel settings-panel"><h2>Рабочее пространство</h2><div class="field"><label for="workspace-name">Название пространства</label><input id="workspace-name" name="workspace" value="${esc(settings.workspace)}" maxlength="60" required/></div><div class="form-grid"><div class="field"><label for="sender-name">Имя отправителя</label><input id="sender-name" name="sender" value="${esc(settings.sender)}" required maxlength="80"/></div><div class="field"><label for="sender-email">Email отправителя</label><input id="sender-email" name="email" type="email" value="${esc(settings.email)}" required/></div><div class="field"><label for="reply-email">Адрес для ответов</label><input id="reply-email" name="reply" type="email" value="${esc(settings.reply)}" required/></div><div class="field"><label for="timezone">Часовой пояс</label><select id="timezone" name="timezone">${[
-      ["Asia/Almaty", "Алматы · UTC+5"],
-      ["Europe/Moscow", "Москва · UTC+3"],
-      ["UTC", "UTC · UTC+0"],
-    ]
-      .map(
-        ([v, l]) =>
-          `<option value="${v}" ${settings.timezone === v ? "selected" : ""}>${l}</option>`,
-      )
-      .join(
-        "",
-      )}</select></div></div><div class="info-box">Настройки сохраняются локально. Почтовый провайдер не подключён. Для реальной отправки потребуется настроить сервер, домен отправителя и обработку статусов доставки.</div><button type="submit" class="button primary">${icon("check")}Сохранить изменения</button></form><section class="panel settings-panel"><h2>Демонстрационные данные</h2><p style="font-size:13px;color:#849476;line-height:1.8">Можно восстановить исходные примеры рассылок. Импортированные контакты и настройки сохранятся.</p>${button("Восстановить примеры", null, "reset", "danger-button")}</section>`
+function instanceForm() {
+  dialogState = { kind: "form" };
+  modal(
+    "Добавить номер",
+    `<p>Данные инстанса — в личном кабинете GREEN-API. После добавления откроется QR-код для подключения WhatsApp.</p><form id="instance-form"><div class="field"><label for="i-name">Название</label><input id="i-name" name="name" placeholder="Например, Номер 1" maxlength="80"/></div><div class="form-grid"><div class="field"><label for="i-id">idInstance</label><input id="i-id" name="id_instance" inputmode="numeric" required placeholder="1101000001"/></div><div class="field"><label for="i-token">apiTokenInstance</label><input id="i-token" name="api_token" type="password" required autocomplete="off"/></div></div><div class="field" style="margin-top:17px"><label for="i-url">apiUrl</label><input id="i-url" name="api_url" placeholder="https://api.green-api.com"/><small>Указан в карточке инстанса, например https://1101.api.green-api.com. Пусто — адрес по умолчанию.</small></div></form>`,
+    button("Отмена", null, "close") +
+      `<button type="submit" form="instance-form" class="button primary">${icon("check")}Добавить</button>`,
   );
 }
-function render() {
+
+function instanceDetail(id) {
+  const i = data.instances.find((x) => x.id === Number(id));
+  if (!i) return;
+  dialogState = { kind: "instance", id: i.id };
+  const a = (label, ic, act, cls = "") =>
+    button(label, ic, act, cls, `data-id="${i.id}"`);
+  modal(
+    esc(i.name),
+    `${badge(instanceStates, i.state)}<dl class="kv"><dt>Телефон</dt><dd>${phoneFmt(i.phone)}</dd><dt>ID подключения</dt><dd>${esc(i.id_instance)}</dd></dl><div class="actions-row">${a("Обновить статус", "refresh", "instance-refresh")}${i.state === "authorized" ? a("Отключить WhatsApp", "logout", "instance-logout", "danger-button") : a("Подключить по QR", "qr", "instance-qr", "primary")}</div>`,
+    a("Удалить номер", "trash", "instance-delete", "text danger-button") +
+      button("Закрыть", null, "close"),
+  );
+}
+function qrDialog(id) {
+  const i = data.instances.find((x) => x.id === Number(id));
+  if (!i) return;
+  dialogState = { kind: "qr", id: i.id };
+  modal(
+    `Подключение · ${esc(i.name)}`,
+    `<div class="qr-box" id="qr-box"><p>Запрашиваем QR-код…</p></div>`,
+    button("Закрыть", null, "close"),
+  );
+  const poll = async () => {
+    if (dialogState?.kind !== "qr" || dialogState.id !== i.id) return;
+    const box = $("#qr-box");
+    try {
+      const r = await api(`/instances/${i.id}/qr`);
+      if (dialogState?.kind !== "qr" || !box?.isConnected) return;
+      if (r.type === "alreadyLogged") {
+        box.innerHTML = `<span class="mail-tile" style="margin:0 auto">${icon("checkCircle")}</span><p><strong>Подключено.</strong><br>Номер готов к работе.</p><div style="margin-top:16px">${data.overview.contacts ? button("Создать рассылку", "send", "campaign-new", "primary") : button("Дальше: загрузить базу", "upload", "import", "primary")}</div>`;
+        refresh();
+        return;
+      }
+      if (r.type === "qrCode")
+        box.innerHTML = `<img alt="QR-код для подключения WhatsApp" src="data:image/png;base64,${esc(r.message)}"/><ol class="qr-steps"><li>Откройте <strong>WhatsApp</strong> на телефоне.</li><li>Нажмите <strong>⋮</strong> вверху (на iPhone — <strong>«Настройки»</strong> внизу) и выберите <strong>«Связанные устройства»</strong>.</li><li>Нажмите <strong>«Привязка устройства»</strong> и наведите камеру на этот код.</li></ol><p class="muted">Код обновляется сам. Это окно закрывать не нужно.</p>`;
+      else if (!box.querySelector("img"))
+        box.innerHTML = `<p><strong>Готовим подключение…</strong><br>Обычно это занимает до минуты. Ничего нажимать не нужно — код появится сам.</p>`;
+    } catch (e) {
+      if (box?.isConnected && !box.querySelector("img"))
+        box.innerHTML = `<p><strong>Готовим подключение…</strong><br>Обычно это занимает до минуты. Ничего нажимать не нужно — код появится сам.</p>`;
+    }
+    qrTimer = setTimeout(poll, 4000);
+  };
+  poll();
+}
+
+function importDialog() {
+  dialogState = { kind: "form" };
+  modal(
+    "Загрузить базу",
+    `<p>Нужна только колонка с телефонами — в любом формате. Имена и остальные колонки сохранятся, их можно подставлять в текст.</p><form id="import-form"><div class="upload-area">${icon("upload")}<strong style="font-size:14px">Файл Excel или CSV</strong><p>XLSX или CSV · до 100 МБ</p><input type="file" name="file" id="import-file" accept=".xlsx,.xls,.csv,.txt" aria-label="Файл базы"/></div><div class="field"><label for="import-url">или ссылка на Google Таблицу</label><input id="import-url" name="url" type="url" placeholder="https://docs.google.com/spreadsheets/d/…"/><small>В таблице нажмите «Настройки доступа» → «Все, у кого есть ссылка». Загрузится лист, открытый по ссылке.</small></div><div class="field"><label for="import-name">Название базы</label><input id="import-name" name="name" maxlength="120" placeholder="По умолчанию — имя файла или таблицы"/></div></form><div id="import-result" class="import-result" aria-live="polite"></div>`,
+    button(formDraft ? "Назад к рассылке" : "Закрыть", null, formDraft ? "form-resume" : "close") +
+      `<button type="submit" form="import-form" class="button primary" id="import-submit">${icon("upload")}Загрузить</button>`,
+  );
+}
+
+const pages = {
+  campaigns: campaignsPage,
+  numbers: numbersPage,
+  base: basePage,
+  templates: templatesPage,
+};
+function renderChrome() {
   const nav = navigation.find((n) => n[0] === page);
   $("#navigation").innerHTML = navigation
     .map(
       ([id, ic, label]) =>
-        `<a href="#${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${id === "campaigns" ? `<span class="nav-count">${campaigns.length}</span>` : ""}</a>`,
+        `<a href="#${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span></a>`,
     )
     .join("");
   $("#breadcrumb-page").textContent = nav[2];
-  document.title = `${nav[2]} · Pulse`;
-  $("#main").innerHTML =
-    page === "overview"
-      ? overview()
-      : page === "campaigns"
-        ? heading(
-            "Каждое сообщение — по делу",
-            "Создавайте кампании и управляйте всем циклом рассылки.",
-            button("Создать рассылку", "plus", "create", "primary"),
-            "УПРАВЛЕНИЕ РАССЫЛКАМИ",
-          ) + campaignPanel()
-        : page === "audience"
-          ? audience()
-          : page === "templates"
-            ? templatePage()
-            : page === "analytics"
-              ? analytics()
-              : settingsPage();
-  updateWorkspace();
+  document.title = `${nav[2]} · Uved.kz`;
 }
-function updateWorkspace() {
-  $(".workspace strong").textContent = settings.workspace;
-  $(".breadcrumb>span").textContent = settings.workspace;
+function render() {
+  renderChrome();
+  $("#main").innerHTML = loaded
+    ? pages[page]()
+    : '<div class="empty">Загрузка…</div>';
+}
+async function load() {
+  const jobs = [
+    api("/instances").then((r) => (data.instances = r)),
+    api("/overview").then((r) => (data.overview = r)),
+  ];
+  if (page === "base" || page === "campaigns")
+    jobs.push(api("/lists").then((r) => (data.lists = r)));
+  if (page === "campaigns")
+    jobs.push(api("/campaigns").then((r) => (data.campaigns = r)));
+  if (page === "templates")
+    jobs.push(api("/templates").then((r) => (data.templates = r)));
+  await Promise.all(jobs);
+  loaded = true;
+}
+let refreshing = null;
+async function refresh() {
+  if (!me) return;
+  while (refreshing) await refreshing;
+  if (!me) return;
+  refreshing = (async () => {
+    try {
+      await load();
+      render();
+      if ($("#dialog").open && dialogState?.kind === "instance")
+        instanceDetail(dialogState.id);
+      if ($("#dialog").open && dialogState?.kind === "campaign")
+        campaignDetail(dialogState.id);
+    } catch (e) {
+      if (me) {
+        toast(e.message);
+        if (!loaded)
+          $("#main").innerHTML =
+            `<div class="empty">Не удалось загрузить данные<p>${esc(e.message)}</p><div style="margin-top:18px">${button("Повторить", "refresh", "refresh")}</div></div>`;
+      }
+    }
+  })();
+  try {
+    await refreshing;
+  } finally {
+    refreshing = null;
+  }
+}
+function goPage(next) {
+  if (page === next) return;
+  page = next;
+  loaded = false;
+  history.replaceState(null, "", "#" + next);
+  render();
+}
+// всё, что нужно форме рассылки, — независимо от открытой вкладки
+async function prefetch() {
+  [data.instances, data.lists, data.templates, data.overview] =
+    await Promise.all([
+      api("/instances"),
+      api("/lists"),
+      api("/templates"),
+      api("/overview"),
+    ]);
+}
+async function openCampaignForm(existing = null, copy = false, preset = null) {
+  await prefetch();
+  if (!data.instances.length) {
+    toast("Сначала подключите номер WhatsApp");
+    return connectNumber();
+  }
+  campaignForm(existing, copy, preset);
+}
+// Одна кнопка: сервер выдаёт свободное подключение или создаёт новое, дальше — только QR-код
+async function connectNumber() {
+  let inst;
+  try {
+    inst = await post("/numbers/connect");
+    if (inst.full) throw new Error(inst.message);
+  } catch (e) {
+    dialogState = { kind: "form" };
+    return modal(
+      "Не получилось подключить номер",
+      `<p>${esc(e.message)}</p>`,
+      button("Понятно", null, "close", "primary"),
+    );
+  }
+  await refresh();
+  qrDialog(inst.id);
+}
+async function campaignAction(id, action, text) {
+  await post(`/campaigns/${id}/${action}`);
+  toast(text);
+  await refresh();
+  campaignDetail(id);
 }
 function navigate() {
-  page = navigation.some((n) => n[0] === location.hash.slice(1))
-    ? location.hash.slice(1)
-    : "overview";
-  filter = "all";
-  query = "";
-  currentPage = 1;
+  const requested = location.hash.slice(1);
+  const next = navigation.some((n) => n[0] === requested)
+    ? requested
+    : "campaigns";
+  if (requested !== next) history.replaceState(null, "", "#" + next);
+  if (next !== page) {
+    loaded = false;
+    closeDialog();
+  }
+  page = next;
   $("#sidebar").classList.remove("open");
+  $("#mobile-menu").setAttribute("aria-expanded", "false");
+  if (!me) return;
   render();
   window.scrollTo(0, 0);
+  refresh();
 }
 window.addEventListener("hashchange", navigate);
 function modal(title, body, footer = "") {
   const dialog = $("#dialog");
-  if (dialog.open) dialog.close();
   $("#dialog-content").innerHTML =
-    `<div class="dialog-header"><h2>${title}</h2><button class="icon-button" data-action="close" aria-label="Закрыть">${icon("close")}</button></div><div class="dialog-body">${body}</div>${footer ? `<div class="dialog-footer">${footer}</div>` : ""}`;
-  dialog.showModal();
+    `<div class="dialog-header"><h2>${title}</h2><button class="icon-button" data-act="close" aria-label="Закрыть">${icon("close")}</button></div><div class="dialog-body">${body}</div>${footer ? `<div class="dialog-footer">${footer}</div>` : ""}`;
+  if (!dialog.open) dialog.showModal();
 }
-$("#dialog").addEventListener("click", (e) => {
-  if (e.target === $("#dialog")) {
-    const r = e.target.getBoundingClientRect();
-    if (
-      e.clientX < r.left ||
-      e.clientX > r.right ||
-      e.clientY < r.top ||
-      e.clientY > r.bottom
-    )
-      e.target.close();
-  }
+function closeDialog() {
+  dialogState = null;
+  clearTimeout(qrTimer);
+  if ($("#dialog").open) $("#dialog").close();
+}
+$("#dialog").addEventListener("close", () => {
+  dialogState = null;
+  clearTimeout(qrTimer);
 });
-function createCampaign(template = null, existing = null) {
-  const item = existing || template || {};
+$("#dialog").addEventListener("click", (e) => {
+  if (e.target !== $("#dialog")) return;
+  const r = e.target.getBoundingClientRect();
+  if (
+    e.clientX < r.left ||
+    e.clientX > r.right ||
+    e.clientY < r.top ||
+    e.clientY > r.bottom
+  )
+    closeDialog();
+});
+let confirmAction = null;
+function confirmDialog(title, text, label, action) {
+  confirmAction = action;
+  dialogState = { kind: "form" };
   modal(
-    existing ? "Редактировать рассылку" : "Новая рассылка",
-    `<p>Хорошее письмо начинается с понятной цели. Заполните детали и сохраните черновик.</p><form id="campaign-form" data-edit="${esc(existing?.id || "")}"><div class="field"><label for="campaign-name">Название рассылки</label><input id="campaign-name" name="name" placeholder="Например, новости за декабрь" value="${esc(item.name || "")}" maxlength="100" required/></div><div class="field"><label for="campaign-subject">Тема письма</label><input id="campaign-subject" name="subject" placeholder="То, что получатель увидит первым" value="${esc(item.subject || "")}" maxlength="150" required/></div><div class="form-grid"><div class="field"><label for="campaign-segment">Аудитория</label><select name="segment" id="campaign-segment">${["Все подписчики", "Активные пользователи", "Клиенты с подпиской", "Новые подписчики", ...(contacts.length ? ["Импортированные контакты"] : [])].map((s) => `<option ${item.segment === s ? "selected" : ""}>${s}</option>`).join("")}</select></div><div class="field"><label for="campaign-total">Количество получателей</label><input id="campaign-total" name="total" type="number" min="1" max="92000" value="${Number(item.total) || 24500}" required/><small>До 92 000 сообщений за кампанию</small></div></div><div class="field" style="margin-top:17px"><label for="campaign-body">Текст письма</label><textarea id="campaign-body" name="body" placeholder="Здравствуйте, {{name}}!" required maxlength="20000">${esc(item.body || "")}</textarea><small>Используйте {{name}}, чтобы персонализировать обращение.</small></div><div class="info-box">Черновик сохранится в этом браузере. Отправка станет доступна после подключения почтового сервиса.</div></form>`,
-    button("Отмена", null, "close") +
-      `<button type="submit" form="campaign-form" class="button primary">${icon("check")}Сохранить черновик</button>`,
+    title,
+    `<p>${text}</p>`,
+    button("Отмена", null, "close") + button(label, null, "confirm", "primary"),
   );
 }
-function detail(id) {
-  const c = campaigns.find((c) => c.id === id);
-  if (!c) return;
-  modal(
-    esc(c.name),
-    `${badge(c.status)}<div class="detail-grid"><div><strong>${num(c.total)}</strong><small>получателей</small></div><div><strong>${num(c.sent)}</strong><small>отправлено</small></div><div><strong>${c.sent ? c.opens.toLocaleString("ru-RU") + "%" : "—"}</strong><small>открываемость</small></div></div><div class="field"><label>Аудитория</label><span style="font-size:13px">${esc(c.segment)}</span></div><div class="preview-email"><div class="preview-subject">${esc(c.subject)}</div>${esc(c.body)}</div><div class="info-box">${c.status === "draft" ? "Это локальный черновик. Реальные письма не отправляются." : "Демонстрационная кампания. Показатели и статусы используются для знакомства с интерфейсом."}</div>`,
-    `<button class="button" data-duplicate="${esc(c.id)}">${icon("copy")}Копировать</button>${c.status === "draft" ? `<button class="button primary" data-edit="${esc(c.id)}">Редактировать</button>` : ["running", "paused"].includes(c.status) ? `<button class="button primary" data-toggle="${esc(c.id)}">${icon(c.status === "running" ? "pause" : "play")}${c.status === "running" ? "Приостановить" : "Продолжить"} демо</button>` : ""}`,
-  );
-}
-function download(filename, rows) {
-  const value = (v) => {
-    let s = String(v ?? "");
-    if (/^[=+@\-\t\r]/.test(s)) s = "'" + s;
-    return '"' + s.replace(/"/g, '""') + '"';
-  };
-  const csv = "\uFEFF" + rows.map((r) => r.map(value).join(",")).join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-function parseCsv(text) {
-  text = text.replace(/^\uFEFF/, "");
-  const first = text.split(/\r?\n/, 1)[0];
-  const delimiter =
-    (first.match(/;/g) || []).length > (first.match(/,/g) || []).length
-      ? ";"
-      : ",";
-  const rows = [];
-  let row = [],
-    cell = "",
-    quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (c === '"') {
-      if (quoted && text[i + 1] === '"') {
-        cell += '"';
-        i++;
-      } else quoted = !quoted;
-    } else if (c === delimiter && !quoted) {
-      row.push(cell.trim());
-      cell = "";
-    } else if ((c === "\n" || c === "\r") && !quoted) {
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      row.push(cell.trim());
-      if (row.some(Boolean)) rows.push(row);
-      row = [];
-      cell = "";
-    } else cell += c;
-  }
-  if (quoted) throw Error("В CSV не закрыты кавычки. Проверьте формат файла.");
-  row.push(cell.trim());
-  if (row.some(Boolean)) rows.push(row);
-  return rows;
-}
-let pendingContacts = [];
-function importModal() {
-  pendingContacts = [];
-  modal(
-    "Импорт аудитории",
-    `<p>Загрузите CSV с заголовками <strong>email</strong>, <strong>name</strong> и <strong>segment</strong>. Обязателен только email.</p><div class="upload-area">${icon("upload")}<strong style="font-size:14px">Ваши контакты — в одном месте</strong><p>CSV до 5 МБ · не более 92 000 контактов<br>Поддерживаются запятые и точки с запятой.</p><input type="file" id="csv-file" accept=".csv,text/csv" aria-label="Выберите CSV-файл"/></div><div id="import-result" class="import-result" aria-live="polite"></div><div class="info-box">Импортируйте контакты, которые дали согласие на получение ваших писем. Файл обрабатывается в браузере.</div>`,
-    button("Скачать пример", null, "sample") +
-      `<button class="button primary" data-action="confirm-import" disabled id="confirm-import">Импортировать</button>`,
-  );
-}
-async function prepareImport(file) {
-  pendingContacts = [];
-  $("#confirm-import").disabled = true;
-  if (!file) return;
-  if (file.size > 5 * 1024 * 1024) {
-    $("#import-result").textContent =
-      "Файл больше 5 МБ. Разделите базу на несколько файлов.";
-    return;
-  }
-  try {
-    const rows = parseCsv(await file.text());
-    const headers = (rows.shift() || []).map((h) => h.toLowerCase());
-    const emailIndex = headers.indexOf("email"),
-      nameIndex = headers.indexOf("name"),
-      segmentIndex = headers.indexOf("segment");
-    if (emailIndex < 0)
-      throw Error(
-        "Не найден столбец email. Скачайте пример CSV и проверьте заголовки.",
-      );
-    let invalid = 0,
-      duplicates = 0;
-    const known = new Set(contacts.map((c) => c.email.toLowerCase()));
-    for (const r of rows) {
-      const email = (r[emailIndex] || "").trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        invalid++;
-        continue;
-      }
-      if (known.has(email)) {
-        duplicates++;
-        continue;
-      }
-      known.add(email);
-      pendingContacts.push({
-        email,
-        name: r[nameIndex] || "",
-        segment: r[segmentIndex] || "Импорт CSV",
-      });
-    }
-    if (contacts.length + pendingContacts.length > 92000)
-      throw Error(
-        "Общее количество контактов превышает 92 000. Уменьшите файл.",
-      );
-    $("#import-result").textContent =
-      `Готово к импорту: ${num(pendingContacts.length)}. Повторы: ${num(duplicates)}. Некорректные адреса: ${num(invalid)}.`;
-    $("#confirm-import").disabled = !pendingContacts.length;
-  } catch (e) {
-    pendingContacts = [];
-    $("#import-result").textContent = e.message;
-  }
-}
-function dateModal() {
-  modal(
-    "Период отчёта",
-    `<p>В демопространстве доступен пример данных за ноябрь 2026. Переключите период графика, чтобы изучить динамику.</p><div class="segmented" style="justify-content:center;padding:8px"><button data-period="week" class="${period === "week" ? "selected" : ""}" style="font-size:14px;padding:12px">14–20 ноября</button><button data-period="month" class="${period === "month" ? "selected" : ""}" style="font-size:14px;padding:12px">Ноябрь целиком</button></div>`,
-    button("Готово", null, "close", "primary"),
-  );
+async function instanceAction(id, fn, text) {
+  await fn();
+  toast(text);
+  await refresh();
+  instanceDetail(id);
 }
 const actions = {
-  create: () => createCampaign(),
-  close: () => $("#dialog").close(),
-  "go-campaigns": () => (location.hash = "campaigns"),
-  date: dateModal,
-  export: () => {
-    download("pulse-campaigns.csv", [
-      [
-        "Название",
-        "Статус",
-        "Аудитория",
-        "Получатели",
-        "Отправлено",
-        "Открытия %",
-        "Переходы %",
-        "Дата",
-      ],
-      ...filteredCampaigns().map((c) => [
-        c.name,
-        statuses[c.status][0],
-        c.segment,
-        c.total,
-        c.sent,
-        c.opens,
-        c.clicks,
-        c.date,
-      ]),
-    ]);
-    toast("Отчёт по кампаниям скачан");
+  close: closeDialog,
+  refresh,
+  confirm: async () => {
+    const fn = confirmAction;
+    confirmAction = null;
+    if (fn) await fn();
   },
-  "export-contacts": () => {
-    if (!contacts.length) return toast("Сначала импортируйте контакты");
-    download("pulse-contacts.csv", [
-      ["email", "name", "segment"],
-      ...contacts.map((c) => [c.email, c.name, c.segment]),
-    ]);
-    toast("Контакты экспортированы");
+  "campaign-new": () => {
+    formDraft = null;
+    return openCampaignForm();
   },
-  sample: () =>
-    download("pulse-contacts-example.csv", [
-      ["email", "name", "segment"],
-      ["anna@example.com", "Анна", "Клиенты"],
-      ["alex@example.com", "Алексей", "Подписчики"],
-    ]),
-  import: importModal,
-  "confirm-import": () => {
-    if (!pendingContacts.length) return;
-    const next = [...contacts, ...pendingContacts];
-    if (!persist("pulse.contacts.v1", next)) return;
-    const count = pendingContacts.length;
-    contacts = next;
-    pendingContacts = [];
-    $("#dialog").close();
-    render();
-    toast(`Импортировано контактов: ${num(count)}`);
+  "campaign-open": (el) => campaignDetail(el.dataset.id),
+  "campaign-edit": (el) =>
+    openCampaignForm(data.campaigns.find((c) => c.id === Number(el.dataset.id))),
+  "campaign-copy": (el) => {
+    const { id, status, stats, ...src } = data.campaigns.find((c) => c.id === Number(el.dataset.id));
+    formDraft = null;
+    return openCampaignForm(src, true);
   },
-  reset: () =>
-    modal(
-      "Восстановить примеры?",
-      `<p>Все текущие кампании, включая созданные черновики, будут заменены исходными демонстрационными примерами. Контакты и настройки сохранятся.</p>`,
-      button("Отмена", null, "close") +
-        button("Восстановить", null, "confirm-reset", "primary"),
+  "campaign-pause": (el) => campaignAction(el.dataset.id, "pause", "Рассылка на паузе"),
+  "campaign-resume": (el) => campaignAction(el.dataset.id, "resume", "Рассылка продолжена"),
+  "campaign-retry": (el) => campaignAction(el.dataset.id, "retry", "Сообщения с ошибками отправим ещё раз"),
+  "campaign-stop": (el) => {
+    const id = el.dataset.id;
+    confirmDialog(
+      "Остановить рассылку?",
+      "Оставшиеся в очереди сообщения не будут отправлены. Продолжить остановленную рассылку нельзя — если хотите вернуться позже, используйте «Паузу».",
+      "Остановить",
+      () => campaignAction(id, "stop", "Рассылка остановлена"),
+    );
+  },
+  "campaign-delete": (el) => {
+    const id = el.dataset.id;
+    confirmDialog(
+      "Удалить рассылку?",
+      "Рассылка и её отчёт будут удалены без возможности восстановления.",
+      "Удалить",
+      async () => {
+        await api(`/campaigns/${id}`, { method: "DELETE" });
+        closeDialog();
+        toast("Рассылка удалена");
+        await refresh();
+      },
+    );
+  },
+  "connect-number": connectNumber,
+  "form-import": () => {
+    formDraft = { ...readCampaignForm(), editId: $("#campaign-form").dataset.edit };
+    importDialog();
+  },
+  "form-resume": (el) => {
+    const d = formDraft || {};
+    formDraft = null;
+    if (el.dataset.list) d.list_id = Number(el.dataset.list);
+    return openCampaignForm(null, false, d);
+  },
+  insert: (el) => {
+    const t = $("#c-text");
+    const start = t.selectionStart ?? t.value.length;
+    t.setRangeText(el.dataset.text, start, t.selectionEnd ?? start, "end");
+    t.focus();
+  },
+  "media-clear": () => {
+    const form = $("#campaign-form");
+    form.elements.media_url.value = "";
+    form.elements.media_name.value = "";
+    $("#c-media").value = "";
+    $("#c-media-info").textContent = "Файл убран.";
+  },
+  preview: async () => {
+    const f = readCampaignForm();
+    const rows = await post("/preview", { text: f.text, list_id: f.list_id });
+    $("#preview").innerHTML = rows.length
+      ? rows.map((r) => `<div class="preview-email"><small>${phoneFmt(r.phone)}${r.name ? " · " + esc(r.name) : ""}</small>${esc(r.text) || '<span class="muted">Пустой текст</span>'}</div>`).join("")
+      : `<div class="info-box">В выбранной базе пока нет контактов — загрузите базу.</div>`;
+  },
+  "template-new": () => templateForm(),
+  "template-edit": (el) =>
+    templateForm(data.templates.find((t) => t.id === Number(el.dataset.id))),
+  "template-use": (el) => {
+    formDraft = null;
+    return openCampaignForm(null, false, {
+      text: data.templates.find((t) => t.id === Number(el.dataset.id))?.text || "",
+    });
+  },
+  "template-delete": (el) => {
+    const id = el.dataset.id;
+    confirmDialog(
+      "Удалить шаблон?",
+      "Шаблон будет удалён. На уже созданные рассылки это не повлияет.",
+      "Удалить",
+      async () => {
+        await api(`/templates/${id}`, { method: "DELETE" });
+        closeDialog();
+        toast("Шаблон удалён");
+        await refresh();
+      },
+    );
+  },
+  "template-save": async () => {
+    const text = $("#c-text").value;
+    if (!text.trim()) return toast("Сначала напишите текст");
+    const t = await post("/templates", { name: $("#c-name").value.trim() || "Мой шаблон", text });
+    data.templates.unshift(t);
+    toast(`Шаблон «${t.name}» сохранён во вкладке «Шаблоны»`);
+  },
+  "instance-new": instanceForm,
+  "instance-open": (el) => instanceDetail(el.dataset.id),
+  "instance-qr": (el) => qrDialog(el.dataset.id),
+  "instance-refresh": (el) =>
+    instanceAction(
+      el.dataset.id,
+      () => post(`/instances/${el.dataset.id}/refresh`),
+      "Статус обновлён",
     ),
-  "confirm-reset": () => {
-    const next = structuredClone(seed);
-    if (!persist("pulse.campaigns.v1", next)) return;
-    campaigns = next;
-    $("#dialog").close();
-    render();
-    toast("Демонстрационные кампании восстановлены");
+  "instance-logout": (el) => {
+    const id = el.dataset.id;
+    confirmDialog(
+      "Отключить WhatsApp?",
+      "Для повторного подключения потребуется отсканировать QR-код.",
+      "Отключить",
+      () =>
+        instanceAction(
+          id,
+          () => post(`/instances/${id}/logout`),
+          "WhatsApp отключён",
+        ),
+    );
+  },
+  "instance-delete": (el) => {
+    const id = el.dataset.id;
+    confirmDialog(
+      "Удалить номер?",
+      "Номер будет удалён из панели. Инстанс в GREEN-API останется.",
+      "Удалить",
+      async () => {
+        await api(`/instances/${id}`, { method: "DELETE" });
+        closeDialog();
+        toast("Номер удалён");
+        await refresh();
+      },
+    );
+  },
+  import: importDialog,
+  "list-delete": (el) => {
+    const id = el.dataset.id;
+    const list = data.lists.find((l) => l.id === Number(id));
+    confirmDialog(
+      "Удалить базу?",
+      `«${esc(list?.name)}» будет удалена. Контакты, которые не используются в других базах и истории сообщений, также удалятся.`,
+      "Удалить",
+      async () => {
+        const r = await api(`/lists/${id}`, { method: "DELETE" });
+        closeDialog();
+        toast(`База удалена. Удалено контактов: ${num(r.removed)}`);
+        await refresh();
+      },
+    );
+  },
+  logout: async () => {
+    await post("/logout");
+    showLogin();
   },
 };
 document.addEventListener("click", (e) => {
-  const action = e.target.closest("[data-action]");
-  if (action) {
-    actions[action.dataset.action]?.();
-    return;
-  }
-  const f = e.target.closest("[data-filter]");
-  if (f) {
-    filter = f.dataset.filter;
-    currentPage = 1;
-    render();
-    return;
-  }
-  const p = e.target.closest("[data-period]");
-  if (p) {
-    period = p.dataset.period;
-    const charts = $("#overview-charts");
-    if (charts) charts.innerHTML = chart() + delivery();
-    if ($("#dialog").open) dateModal();
-    return;
-  }
-  const detailButton = e.target.closest("[data-detail]");
-  if (detailButton) {
-    detail(detailButton.dataset.detail);
-    return;
-  }
-  const pagination = e.target.closest("[data-paginate]");
-  if (pagination) {
-    currentPage = Number(pagination.dataset.paginate);
-    $("#campaign-table").innerHTML = campaignTable();
-    return;
-  }
-  const template = e.target.closest("[data-template]");
-  if (template) {
-    createCampaign(templates[Number(template.dataset.template)]);
-    return;
-  }
-  const edit = e.target.closest("[data-edit]");
-  if (edit && edit.tagName === "BUTTON") {
-    createCampaign(
-      null,
-      campaigns.find((c) => c.id === edit.dataset.edit),
-    );
-    return;
-  }
-  const duplicate = e.target.closest("[data-duplicate]");
-  if (duplicate) {
-    const c = campaigns.find((c) => c.id === duplicate.dataset.duplicate);
-    createCampaign({
-      ...c,
-      name: c.name + " — копия",
-      sent: 0,
-      status: "draft",
+  const el = e.target.closest("[data-act]");
+  if (!el || el.disabled || !actions[el.dataset.act]) return;
+  el.disabled = true;
+  Promise.resolve()
+    .then(() => actions[el.dataset.act](el))
+    .catch(fail)
+    .finally(() => {
+      if (el.isConnected) el.disabled = false;
     });
-    return;
-  }
-  const toggle = e.target.closest("[data-toggle]");
-  if (toggle) {
-    const c = campaigns.find((c) => c.id === toggle.dataset.toggle);
-    const old = c.status;
-    c.status = c.status === "running" ? "paused" : "running";
-    if (!saveCampaigns()) {
-      c.status = old;
-      return;
+});
+document.addEventListener("change", async (e) => {
+  const t = e.target;
+  try {
+    if (t.id === "c-template" && t.value) {
+      const tpl = data.templates.find((x) => x.id === Number(t.value));
+      if (tpl) $("#c-text").value = tpl.text;
+      t.value = "";
+      $("#c-text").focus();
     }
-    detail(c.id);
-    render();
-    toast(
-      c.status === "paused"
-        ? "Демо-кампания поставлена на паузу"
-        : "Демо-кампания продолжена",
-    );
-  }
-});
-document.addEventListener("input", (e) => {
-  if (e.target.id === "campaign-search") {
-    query = e.target.value;
-    currentPage = 1;
-    $("#campaign-table").innerHTML = campaignTable();
-  }
-  if (e.target.id === "contact-search") {
-    contactQuery = e.target.value;
-    $("#contact-table").innerHTML = contactTable();
-  }
-});
-document.addEventListener("change", (e) => {
-  if (e.target.id === "csv-file") prepareImport(e.target.files[0]);
-  if (
-    e.target.id === "campaign-segment" &&
-    e.target.value === "Импортированные контакты"
-  )
-    $("#campaign-total").value = contacts.length;
-});
-document.addEventListener("submit", (e) => {
-  if (e.target.id === "campaign-form") {
-    e.preventDefault();
-    const form = e.target,
-      data = Object.fromEntries(new FormData(form));
-    if (
-      data.segment === "Импортированные контакты" &&
-      Number(data.total) > contacts.length
-    ) {
-      $("#campaign-total").setCustomValidity(
-        `В базе только ${contacts.length} контактов`,
-      );
-      $("#campaign-total").reportValidity();
-      $("#campaign-total").addEventListener(
-        "input",
-        () => $("#campaign-total").setCustomValidity(""),
-        { once: true },
-      );
-      return;
+    if (t.id === "c-media" && t.files[0]) {
+      const info = $("#c-media-info");
+      info.textContent = "Загружаем файл…";
+      const form = new FormData();
+      form.append("file", t.files[0]);
+      const r = await api("/media", { method: "POST", form });
+      const f = $("#campaign-form");
+      f.elements.media_url.value = r.url;
+      f.elements.media_name.value = r.name;
+      info.textContent = `Прикреплён: ${r.name}`;
     }
+  } catch (err) {
+    if (t.id === "c-media") {
+      t.value = "";
+      $("#c-media-info").textContent = err.message;
+    }
+    fail(err);
+  }
+});
+const submitters = {
+  "campaign-form": async (form, submitter) => {
+    const { exclude_recent_days, ...body } = readCampaignForm();
+    const launch = submitter?.value === "launch";
     const id = form.dataset.edit;
-    const campaign = {
-      id: id || crypto.randomUUID(),
-      name: data.name.trim(),
-      subject: data.subject.trim(),
-      segment: data.segment,
-      total: Number(data.total),
-      body: data.body.trim(),
-      sent: 0,
-      opens: 0,
-      clicks: 0,
-      status: "draft",
-      date: new Date().toISOString(),
-      color: "lilac",
-    };
-    if (!campaign.name || !campaign.subject || !campaign.body)
-      return toast("Заполните название, тему и текст письма");
-    const next = id
-      ? campaigns.map((c) => (c.id === id ? campaign : c))
-      : [campaign, ...campaigns];
-    if (!persist("pulse.campaigns.v1", next)) return;
-    campaigns = next;
-    $("#dialog").close();
-    filter = "draft";
-    query = "";
-    currentPage = 1;
-    if (page !== "campaigns") {
-      location.hash = "campaigns";
-    } else render();
-    toast(id ? "Изменения сохранены" : "Черновик создан");
-  }
-  if (e.target.id === "settings-form") {
-    e.preventDefault();
-    const next = Object.fromEntries(new FormData(e.target));
-    if (!next.workspace.trim() || !next.sender.trim())
-      return toast("Введите название пространства и имя отправителя");
-    if (!persist("pulse.settings.v1", next)) return;
-    settings = next;
-    updateWorkspace();
-    toast("Настройки сохранены");
-  }
+    const saved = id
+      ? await api(`/campaigns/${id}`, { method: "PUT", body })
+      : await post("/campaigns", body);
+    let message = id ? "Изменения сохранены" : "Черновик сохранён";
+    if (launch) {
+      try {
+        const r = await post(`/campaigns/${saved.id}/start`, { exclude_recent_days });
+        message = data.instances.some((i) => body.instance_ids.includes(i.id) && isReady(i))
+          ? `Рассылка запущена, получателей: ${num(r.stats.total)}`
+          : `Рассылка в очереди (${num(r.stats.total)}). Отправка начнётся, когда номер будет подключён.`;
+      } catch (e) {
+        message = `Черновик сохранён, но запустить не удалось: ${e.message}`;
+      }
+    }
+    formDraft = null;
+    goPage("campaigns");
+    toast(message);
+    await refresh();
+    campaignDetail(saved.id);
+  },
+  "template-form": async (form) => {
+    const id = form.dataset.id;
+    const body = Object.fromEntries(new FormData(form));
+    if (id) await api(`/templates/${id}`, { method: "PUT", body });
+    else await post("/templates", body);
+    closeDialog();
+    toast("Шаблон сохранён");
+    goPage("templates");
+    await refresh();
+  },
+  "instance-form": async (form) => {
+    const r = await post("/instances", Object.fromEntries(new FormData(form)));
+    toast(
+      r.webhook === "ok" || r.webhook === "skipped"
+        ? "Номер добавлен"
+        : `Номер добавлен, но webhook не установлен: ${r.webhook}`,
+    );
+    await refresh();
+    if (r.state === "authorized") instanceDetail(r.id);
+    else qrDialog(r.id);
+  },
+  "import-form": async (form) => {
+    const out = $("#import-result");
+    out.textContent = "Загружаем и обрабатываем файл…";
+    try {
+      const fd = new FormData(form);
+      const url = String(fd.get("url") || "").trim();
+      if (!url && !fd.get("file")?.size)
+        throw new Error("Выберите файл или вставьте ссылку на Google Таблицу");
+      const r = url
+        ? await post("/import-url", { url, name: fd.get("name") })
+        : await api("/import", { method: "POST", form: fd });
+      out.innerHTML = `<strong>База «${esc(r.list_name)}» загружена за ${(r.ms / 1000).toLocaleString("ru-RU")} с.</strong><dl class="kv"><dt>Строк в файле</dt><dd>${num(r.rows)}</dd><dt>Валидных номеров</dt><dd>${num(r.valid)}</dd><dt>Новых</dt><dd>${num(r.new)}</dd><dt>Уже было в базе</dt><dd>${num(r.existing)}</dd><dt>Дублей в файле</dt><dd>${num(r.duplicates)}</dd><dt>Невалидных</dt><dd>${num(r.invalid)}${r.invalid_examples.length ? ` <span class="muted">(например: ${esc(r.invalid_examples.filter(Boolean).slice(0, 5).join(", ") || "пустые ячейки")})</span>` : ""}</dd><dt>В стоп-листе</dt><dd>${num(r.opted_out)}</dd><dt>Колонка телефона</dt><dd>${esc(r.phone_column)}</dd></dl><div class="actions-row">${button(formDraft ? "Продолжить рассылку с этой базой" : "Создать рассылку по этой базе", "send", "form-resume", "primary", `data-list="${r.list_id}"`)}</div>`;
+      form.reset();
+      refresh();
+    } catch (e) {
+      out.innerHTML = `<span class="error-text">${esc(e.message)}</span>`;
+    }
+  },
+  "login-form": async (form) => {
+    $("#login-error").textContent = "";
+    try {
+      await post("/login", Object.fromEntries(new FormData(form)));
+      form.reset();
+      await start();
+    } catch (e) {
+      $("#login-error").textContent = e.message;
+    }
+  },
+};
+
+document.addEventListener("submit", (e) => {
+  const fn = submitters[e.target.id];
+  if (!fn) return;
+  e.preventDefault();
+  if (e.target.dataset.busy) return;
+  const form = e.target;
+  const submitter = e.submitter;
+  const submit =
+    submitter ||
+    document.querySelector(
+      `button[type="submit"][form="${form.id}"], #${form.id} button[type="submit"]`,
+    );
+  form.dataset.busy = "true";
+  if (submit) submit.disabled = true;
+  Promise.resolve()
+    .then(() => fn(form, submitter))
+    .catch(fail)
+    .finally(() => {
+      delete form.dataset.busy;
+      if (submit?.isConnected) submit.disabled = false;
+    });
 });
-$("#mobile-menu").onclick = () => $("#sidebar").classList.toggle("open");
-$("#scrim").onclick = () => $("#sidebar").classList.remove("open");
-for (const id of ["workspace", "profile", "account"])
-  $("#" + id).onclick = () => {
-    location.hash = "settings";
-  };
-$("#help").onclick = () =>
-  modal(
-    "Ваш первый запуск в Pulse",
-    `<div class="notification-list">${[
-      [
-        "users",
-        "1. Добавьте аудиторию",
-        "Откройте «Аудитория», скачайте пример и импортируйте CSV с адресами.",
-      ],
-      [
-        "template",
-        "2. Подготовьте письмо",
-        "Выберите шаблон или создайте свою рассылку. Сохраните её в черновики.",
-      ],
-      [
-        "chart",
-        "3. Изучите результаты",
-        "Посмотрите пример статистики: доставку, открытия и переходы.",
-      ],
-    ]
-      .map(
-        ([ic, title, text]) =>
-          `<div class="notification-item"><span class="mail-tile">${icon(ic)}</span><div><strong>${title}</strong><p>${text}</p></div></div>`,
-      )
-      .join(
-        "",
-      )}</div><div class="info-box">Это фронтенд-прототип. Реальная отправка, синхронизация команды и статистика появятся после подключения backend API и почтового провайдера.</div>`,
-    button("Понятно", null, "close", "primary"),
-  );
-$("#notifications").onclick = () =>
-  modal(
-    "Уведомления",
-    `<div class="notification-list"><div class="notification-item"><span class="mail-tile">${icon("checkCircle")}</span><div><strong>Рабочее пространство готово</strong><p>Изучите демо-кампании или создайте первую собственную рассылку.</p><small>Демонстрационное уведомление</small></div></div><div class="notification-item"><span class="mail-tile lilac">${icon("shield")}</span><div><strong>Ваши черновики сохраняются</strong><p>Локальные изменения доступны после перезагрузки страницы в этом браузере.</p></div></div></div>`,
-    button("Закрыть", null, "close", "primary"),
-  );
-navigate();
+$("#mobile-menu").onclick = () => {
+  const open = $("#sidebar").classList.toggle("open");
+  $("#mobile-menu").setAttribute("aria-expanded", String(open));
+};
+$("#scrim").onclick = () => {
+  $("#sidebar").classList.remove("open");
+  $("#mobile-menu").setAttribute("aria-expanded", "false");
+};
+for (const id of ["profile", "account"])
+  $("#" + id).onclick = () =>
+    confirmDialog(
+      "Выйти из аккаунта?",
+      "Для входа понадобится пароль администратора.",
+      "Выйти",
+      actions.logout,
+    );
+function showLogin() {
+  me = null;
+  closeDialog();
+  $("#login").hidden = false;
+  $("#login-name").focus();
+}
+async function start() {
+  try {
+    if (!(await api("/login")).ok) return showLogin();
+    me = await api("/me");
+    tz = me.tz || tz;
+    $("#login").hidden = true;
+    navigate();
+  } catch (e) {
+    showLogin();
+    $("#login-error").textContent = e.message;
+  }
+}
+setInterval(() => {
+  if (!document.hidden && !refreshing && me) refresh();
+}, 10000);
+start();
