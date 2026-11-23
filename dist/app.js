@@ -104,6 +104,8 @@ const data = {
 };
 let page = "campaigns",
   formDraft = null, // значения формы рассылки, пока пользователь загружает базу
+  importPreview = null,
+  importPreviewGeneration = 0,
   dialogState = null,
   qrTimer = null,
   loaded = false;
@@ -176,7 +178,8 @@ function campaignsPage() {
     heading(
       "Рассылки",
       "Подключите номер, загрузите базу и запустите — остальное система сделает сама.",
-      button("Новая рассылка", "plus", "campaign-new", "primary"),
+      button("Написать сообщение", "message", "manual-message") +
+        button("Новая рассылка", "plus", "campaign-new", "primary"),
     ) +
     stepsBlock() +
     `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Мои рассылки <span class="section-count">${rows.length}</span></h2><span class="section-caption">Сегодня отправлено: ${num(data.overview.sent_today)}</span></div>${
@@ -344,9 +347,10 @@ function numbersPage() {
     heading(
       "WhatsApp-номера",
       "Подключите номера, с которых будете отправлять сообщения.",
-      button("Подключить номер", "plus", "connect-number", "primary"),
+      button("Написать сообщение", "message", "manual-message", "primary") +
+        button("Подключить номер", "plus", "connect-number"),
     ) +
-    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Мои номера <span class="section-count">${rows.length}</span></h2><span class="section-caption">${rows.filter((i) => i.state === "authorized").length} подключено</span></div>${rows.length ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название</th><th>Номер телефона</th><th>Подключение</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows.map((i) => `<tr><td><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span class="mail-tile">${icon("phone")}</span><strong>${esc(i.name)}</strong></button></td><td data-label="Телефон">${i.phone ? phoneFmt(i.phone) : '<span class="muted">Ждёт подключения</span>'}</td><td data-label="Статус">${badge(instanceStates, i.state)}</td><td class="connection-actions"><div class="row-actions">${i.state === "authorized" ? button("Управление", null, "instance-open", "compact", `data-id="${i.id}"`) : button("Подключить по QR", "qr", "instance-qr", "primary compact", `data-id="${i.id}"`)}</div></td></tr>`).join("")}</tbody></table></div>` : empty("phone", "Подключите первый номер", "Нажмите «Подключить номер» и наведите камеру телефона на код на экране. Номеров можно подключить несколько.")}</section><p class="page-note">${icon("qr")}Можно подключить несколько номеров — рассылка распределится между ними сама, и пойдёт быстрее.</p><p class="page-note"><button type="button" class="link-button" data-act="instance-new">Добавить подключение GREEN-API вручную (для администратора)</button></p>`
+    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Мои номера <span class="section-count">${rows.length}</span></h2><span class="section-caption">${rows.filter((i) => i.state === "authorized").length} подключено</span></div>${rows.length ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название</th><th>Номер телефона</th><th>Подключение</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows.map((i) => `<tr><td><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span class="mail-tile">${icon("phone")}</span><strong>${esc(i.name)}</strong></button></td><td data-label="Телефон">${i.phone ? phoneFmt(i.phone) : '<span class="muted">Ждёт подключения</span>'}</td><td data-label="Статус">${badge(instanceStates, i.state)}</td><td class="connection-actions"><div class="row-actions">${i.state === "authorized" && i.enabled ? button("Написать", "message", "manual-message", "compact", `data-id="${i.id}"`) : ""}${i.state === "authorized" ? button("Управление", null, "instance-open", "compact", `data-id="${i.id}"`) : button("Подключить по QR", "qr", "instance-qr", "primary compact", `data-id="${i.id}"`)}</div></td></tr>`).join("")}</tbody></table></div>` : empty("phone", "Подключите первый номер", "Нажмите «Подключить номер» и наведите камеру телефона на код на экране. Номеров можно подключить несколько.")}</section><p class="page-note">${icon("qr")}Можно подключить несколько номеров — рассылка распределится между ними сама, и пойдёт быстрее.</p><p class="page-note"><button type="button" class="link-button" data-act="instance-new">Добавить подключение GREEN-API вручную (для администратора)</button></p>`
   );
 }
 function basePage() {
@@ -354,10 +358,11 @@ function basePage() {
   return (
     heading(
       "База для рассылки",
-      "Загружайте контакты из Excel, CSV или Google Таблиц. Дубли удалим автоматически.",
+      "Загрузите базу по единому шаблону Excel и проверьте получателей до сохранения.",
       button("Загрузить базу", "upload", "import", "primary"),
     ) +
-    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Загруженные базы <span class="section-count">${rows.length}</span></h2><span class="section-caption">${num(data.overview.contacts)} уникальных контактов</span></div>${rows.length ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название базы</th><th>Контактов</th><th>Дата загрузки</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows.map((l) => `<tr><td><span class="campaign-name"><span class="mail-tile">${icon("file")}</span><strong>${esc(l.name)}</strong></span></td><td data-label="Контактов">${num(l.contacts)}</td><td data-label="Загружена">${dateTime(l.created_at)}</td><td class="connection-actions">${button("Удалить", "trash", "list-delete", "text danger-button", `data-id="${l.id}"`)}</td></tr>`).join("")}</tbody></table></div>` : empty("database", "Добавьте базу получателей", "Загрузите файл с номерами телефонов. Имена и другие данные о контактах сохранятся вместе с базой.")}</section><p class="page-note">${icon("file")}XLSX, CSV или ссылка на Google Таблицу · колонка с телефоном определяется автоматически.</p>`
+    importGuide() +
+    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Загруженные базы <span class="section-count">${rows.length}</span></h2><span class="section-caption">${num(data.overview.contacts)} уникальных контактов</span></div>${rows.length ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название базы</th><th>Контактов</th><th>Дата загрузки</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows.map((l) => `<tr><td><span class="campaign-name"><span class="mail-tile">${icon("file")}</span><strong>${esc(l.name)}</strong></span></td><td data-label="Контактов">${num(l.contacts)}</td><td data-label="Загружена">${dateTime(l.created_at)}</td><td class="connection-actions"><div class="row-actions"><a class="button compact" href="/api/lists/${l.id}/recipients.csv" download="recipients.csv">${icon("download")}Получатели</a>${button("Удалить", "trash", "list-delete", "text danger-button", `data-id="${l.id}"`)}</div></td></tr>`).join("")}</tbody></table></div>` : empty("database", "Добавьте базу получателей", "Загрузите файл с номерами телефонов. Имена и другие данные о контактах сохранятся вместе с базой.")}</section>`
   );
 }
 function instanceForm() {
@@ -370,6 +375,19 @@ function instanceForm() {
   );
 }
 
+function manualMessageDialog(selectedId) {
+  const ready = data.instances.filter((i) => i.state === "authorized" && i.enabled);
+  if (!ready.length) return toast("Сначала подключите номер WhatsApp");
+  dialogState = { kind: "form" };
+  modal(
+    "Написать сообщение",
+    `<p>Введите телефон получателя и текст. Сообщение отправится сразу с выбранного номера.</p><form id="manual-message-form"><div class="field"><label for="manual-instance">Отправить с номера</label><select id="manual-instance" name="instance_id" required>${ready.map((i) => `<option value="${i.id}" ${i.id === Number(selectedId) ? "selected" : ""}>${esc(i.name)}${i.phone ? ` · +${esc(i.phone)}` : ""}</option>`).join("")}</select></div><div class="field"><label for="manual-phone">Телефон получателя</label><input id="manual-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 701 123 45 67" required/><small>Введите номер с кодом страны.</small></div><div class="field"><label for="manual-text">Сообщение</label><textarea id="manual-text" name="text" maxlength="4000" placeholder="Напишите текст сообщения" required></textarea></div><div id="manual-result" class="import-result" aria-live="polite"></div></form>`,
+    button("Отмена", null, "close") +
+      `<button type="submit" form="manual-message-form" class="button primary">${icon("send")}Отправить</button>`,
+  );
+  $("#manual-phone").focus();
+}
+
 function instanceDetail(id) {
   const i = data.instances.find((x) => x.id === Number(id));
   if (!i) return;
@@ -378,7 +396,7 @@ function instanceDetail(id) {
     button(label, ic, act, cls, `data-id="${i.id}"`);
   modal(
     esc(i.name),
-    `${badge(instanceStates, i.state)}<dl class="kv"><dt>Телефон</dt><dd>${phoneFmt(i.phone)}</dd><dt>ID подключения</dt><dd>${esc(i.id_instance)}</dd></dl><div class="actions-row">${a("Обновить статус", "refresh", "instance-refresh")}${i.state === "authorized" ? a("Отключить WhatsApp", "logout", "instance-logout", "danger-button") : a("Подключить по QR", "qr", "instance-qr", "primary")}</div>`,
+    `${badge(instanceStates, i.state)}<dl class="kv"><dt>Телефон</dt><dd>${phoneFmt(i.phone)}</dd><dt>ID подключения</dt><dd>${esc(i.id_instance)}</dd></dl><div class="actions-row">${i.state === "authorized" && i.enabled ? a("Написать сообщение", "message", "manual-message", "primary") : ""}${a("Обновить статус", "refresh", "instance-refresh")}${i.state === "authorized" ? a("Отключить WhatsApp", "logout", "instance-logout", "danger-button") : a("Подключить по QR", "qr", "instance-qr", "primary")}</div>`,
     a("Удалить номер", "trash", "instance-delete", "text danger-button") +
       button("Закрыть", null, "close"),
   );
@@ -416,13 +434,19 @@ function qrDialog(id) {
   poll();
 }
 
+function importGuide() {
+  return `<section class="panel import-guide" aria-label="Как подготовить базу"><h2>Единый формат базы</h2><ol><li>Скачайте шаблон Excel <strong>.xlsx</strong>. Оставьте один лист с названием <strong>Контакты</strong>.</li><li>Не меняйте первую строку и порядок колонок: <strong>A — Телефон, B — Имя, C — Город</strong>. Вторая строка и ниже — получатели, по одному в строке. Имя и город можно оставить пустыми.</li><li>В колонке A укажите номер с кодом страны: <strong>+7 701 123 45 67</strong>, <strong>8 701 123 45 67</strong> или <strong>+998 90 123 45 67</strong>. Пробелы и скобки допустимы. Формулы и два номера в одной ячейке не используйте.</li><li>Нажмите <strong>Проверить базу</strong>. Система покажет количество получателей и первые 10 номеров. Если есть пустые или некорректные телефоны, исправьте файл и проверьте снова. Только после проверки появится кнопка сохранения базы.</li></ol><div class="table-scroll"><table class="import-example"><caption>Пример строк на листе «Контакты»</caption><thead><tr><th>A · Телефон</th><th>B · Имя</th><th>C · Город</th></tr></thead><tbody><tr><td>+7 701 123 45 67</td><td>Айгуль</td><td>Алматы</td></tr><tr><td>8 705 123 45 68</td><td>Нурлан</td><td>Астана</td></tr></tbody></table></div><p>Повторяющиеся номера попадут в базу один раз. Отписавшиеся не попадут в список получателей. Для текста сообщения можно использовать <strong>{имя}</strong> и <strong>{город}</strong>.</p><a class="button import-template-link" href="/template-contacts.xlsx" download="template-contacts.xlsx">${icon("download")}Скачать шаблон Excel</a></section>`;
+}
+
 function importDialog() {
+  importPreview = null;
+  importPreviewGeneration++;
   dialogState = { kind: "form" };
   modal(
     "Загрузить базу",
-    `<p>Нужна только колонка с телефонами — в любом формате. Имена и остальные колонки сохранятся, их можно подставлять в текст.</p><form id="import-form"><div class="upload-area">${icon("upload")}<strong style="font-size:14px">Файл Excel или CSV</strong><p>XLSX или CSV · до 100 МБ</p><input type="file" name="file" id="import-file" accept=".xlsx,.xls,.csv,.txt" aria-label="Файл базы"/></div><div class="field"><label for="import-url">или ссылка на Google Таблицу</label><input id="import-url" name="url" type="url" placeholder="https://docs.google.com/spreadsheets/d/…"/><small>В таблице нажмите «Настройки доступа» → «Все, у кого есть ссылка». Загрузится лист, открытый по ссылке.</small></div><div class="field"><label for="import-name">Название базы</label><input id="import-name" name="name" maxlength="120" placeholder="По умолчанию — имя файла или таблицы"/></div></form><div id="import-result" class="import-result" aria-live="polite"></div>`,
+    `<p>Принимаем только шаблон Excel .xlsx: лист «Контакты», колонки «Телефон», «Имя», «Город». Сначала проверим, кому попадёт сообщение.</p><form id="import-form"><div class="upload-area">${icon("upload")}<strong style="font-size:14px">Файл по шаблону Excel</strong><p>.xlsx · до 100 МБ</p><input type="file" name="file" id="import-file" accept=".xlsx" aria-label="Файл базы" required/></div><div class="field"><label for="import-name">Название базы</label><input id="import-name" name="name" maxlength="120" placeholder="По умолчанию — имя файла"/></div></form><div id="import-result" class="import-result" aria-live="polite"></div>${importGuide()}`,
     button(formDraft ? "Назад к рассылке" : "Закрыть", null, formDraft ? "form-resume" : "close") +
-      `<button type="submit" form="import-form" class="button primary" id="import-submit">${icon("upload")}Загрузить</button>`,
+      `<button type="submit" form="import-form" class="button primary" id="import-submit">${icon("check")}Проверить базу</button>`,
   );
 }
 
@@ -647,6 +671,24 @@ const actions = {
     );
   },
   "connect-number": connectNumber,
+  "import-confirm": async () => {
+    if (!importPreview) return toast("Сначала проверьте базу");
+    const out = $("#import-result");
+    const fd = new FormData();
+    fd.append("file", importPreview.file);
+    fd.append("hash", importPreview.hash);
+    fd.append("name", $("#import-name").value.trim());
+    out.textContent = "Сохраняем проверенную базу…";
+    try {
+      const r = await api("/import-standard", { method: "POST", form: fd });
+      importPreview = null;
+      out.innerHTML = `<strong>База «${esc(r.list_name)}» сохранена.</strong><p>Получателей после исключения отписавшихся: ${num(r.valid - r.opted_out)}. Дублей в файле: ${num(r.duplicates)}.</p><div class="actions-row"><a class="button" href="/api/lists/${r.list_id}/recipients.csv" download="recipients.csv">${icon("download")}Скачать полный список получателей</a>${button(formDraft ? "Продолжить рассылку с этой базой" : "Создать рассылку по этой базе", "send", "form-resume", "primary", `data-list="${r.list_id}"`)}</div>`;
+      $("#import-form").reset();
+      await refresh();
+    } catch (e) {
+      out.innerHTML = `<span class="error-text">${esc(e.message)}</span>`;
+    }
+  },
   "form-import": () => {
     formDraft = { ...readCampaignForm(), editId: $("#campaign-form").dataset.edit };
     importDialog();
@@ -708,6 +750,7 @@ const actions = {
     toast(`Шаблон «${t.name}» сохранён во вкладке «Шаблоны»`);
   },
   "instance-new": instanceForm,
+  "manual-message": (el) => manualMessageDialog(el.dataset.id),
   "instance-open": (el) => instanceDetail(el.dataset.id),
   "instance-qr": (el) => qrDialog(el.dataset.id),
   "instance-refresh": (el) =>
@@ -779,6 +822,11 @@ document.addEventListener("click", (e) => {
 document.addEventListener("change", async (e) => {
   const t = e.target;
   try {
+    if (t.id === "import-file") {
+      importPreview = null;
+      importPreviewGeneration++;
+      $("#import-result").textContent = "Файл выбран. Нажмите «Проверить базу».";
+    }
     if (t.id === "c-template" && t.value) {
       const tpl = data.templates.find((x) => x.id === Number(t.value));
       if (tpl) $("#c-text").value = tpl.text;
@@ -805,6 +853,20 @@ document.addEventListener("change", async (e) => {
   }
 });
 const submitters = {
+  "manual-message-form": async (form) => {
+    const out = $("#manual-result");
+    out.textContent = "Отправляем сообщение…";
+    const fields = Object.fromEntries(new FormData(form));
+    try {
+      await post(`/instances/${fields.instance_id}/test`, { phone: fields.phone, text: fields.text });
+      out.innerHTML = '<strong>Сообщение отправлено.</strong>';
+      form.elements.phone.value = "";
+      form.elements.text.value = "";
+      toast("Сообщение отправлено");
+    } catch (e) {
+      out.innerHTML = `<span class="error-text">${esc(e.message)}</span>`;
+    }
+  },
   "campaign-form": async (form, submitter) => {
     const { exclude_recent_days, ...body } = readCampaignForm();
     const launch = submitter?.value === "launch";
@@ -852,19 +914,19 @@ const submitters = {
   },
   "import-form": async (form) => {
     const out = $("#import-result");
-    out.textContent = "Загружаем и обрабатываем файл…";
+    const generation = ++importPreviewGeneration;
+    out.textContent = "Проверяем файл и номера…";
     try {
       const fd = new FormData(form);
-      const url = String(fd.get("url") || "").trim();
-      if (!url && !fd.get("file")?.size)
-        throw new Error("Выберите файл или вставьте ссылку на Google Таблицу");
-      const r = url
-        ? await post("/import-url", { url, name: fd.get("name") })
-        : await api("/import", { method: "POST", form: fd });
-      out.innerHTML = `<strong>База «${esc(r.list_name)}» загружена за ${(r.ms / 1000).toLocaleString("ru-RU")} с.</strong><dl class="kv"><dt>Строк в файле</dt><dd>${num(r.rows)}</dd><dt>Валидных номеров</dt><dd>${num(r.valid)}</dd><dt>Новых</dt><dd>${num(r.new)}</dd><dt>Уже было в базе</dt><dd>${num(r.existing)}</dd><dt>Дублей в файле</dt><dd>${num(r.duplicates)}</dd><dt>Невалидных</dt><dd>${num(r.invalid)}${r.invalid_examples.length ? ` <span class="muted">(например: ${esc(r.invalid_examples.filter(Boolean).slice(0, 5).join(", ") || "пустые ячейки")})</span>` : ""}</dd><dt>В стоп-листе</dt><dd>${num(r.opted_out)}</dd><dt>Колонка телефона</dt><dd>${esc(r.phone_column)}</dd></dl><div class="actions-row">${button(formDraft ? "Продолжить рассылку с этой базой" : "Создать рассылку по этой базе", "send", "form-resume", "primary", `data-list="${r.list_id}"`)}</div>`;
-      form.reset();
-      refresh();
+      const file = fd.get("file");
+      if (!file?.size) throw new Error("Выберите файл по шаблону Excel .xlsx");
+      const r = await api("/import-standard/preview", { method: "POST", form: fd });
+      if (generation !== importPreviewGeneration) return;
+      importPreview = r.can_import ? { file, hash: r.hash } : null;
+      out.innerHTML = `<div class="info-box"><strong>${r.can_import ? "Проверка пройдена" : "Исправьте файл перед загрузкой"}</strong><dl class="kv"><dt>Колонка получателя</dt><dd>${esc(r.phone_column)}</dd><dt>Строк в файле</dt><dd>${num(r.rows)}</dd><dt>Уникальных номеров</dt><dd>${num(r.valid)}</dd><dt>Дублей</dt><dd>${num(r.duplicates)}</dd><dt>Некорректных строк</dt><dd>${num(r.invalid)}</dd><dt>В стоп-листе</dt><dd>${num(r.opted_out)}</dd><dt>Получателей рассылки</dt><dd><strong>${num(r.recipients)}</strong></dd></dl>${r.invalid ? `<p class="error-text">Примеры ошибок: ${esc(r.invalid_examples.filter(Boolean).slice(0, 5).join(", ") || "пустые номера")}. Исправьте файл и проверьте снова.</p>` : ""}</div>${r.sample.length ? `<div class="table-scroll"><table class="import-example"><caption>Первые ${r.sample.length} получателей после проверки</caption><thead><tr><th>Телефон</th><th>Имя</th></tr></thead><tbody>${r.sample.map((c) => `<tr><td>+${esc(c.phone)}</td><td>${esc(c.name || "—")}</td></tr>`).join("")}</tbody></table></div>` : ""}${r.can_import ? `<div class="actions-row">${button("Сохранить проверенную базу", "check", "import-confirm", "primary")}</div>` : ""}`;
     } catch (e) {
+      if (generation !== importPreviewGeneration) return;
+      importPreview = null;
       out.innerHTML = `<span class="error-text">${esc(e.message)}</span>`;
     }
   },

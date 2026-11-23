@@ -1130,6 +1130,46 @@ input[type="checkbox"] {
   background: #f8faff;
   margin-bottom: 20px;
 }
+.import-guide {
+  padding: 22px 24px;
+  margin-bottom: 22px;
+  color: #526786;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.import-guide h2 {
+  color: var(--dark);
+  margin-bottom: 12px;
+}
+.import-guide ol {
+  margin: 0 0 16px;
+  padding-left: 21px;
+}
+.import-guide li + li,
+.import-guide p + p {
+  margin-top: 9px;
+}
+.import-guide p {
+  margin-top: 13px;
+}
+.import-example {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.import-example caption {
+  text-align: left;
+  font-weight: 700;
+  color: var(--dark);
+  margin-bottom: 8px;
+}
+.import-example th,
+.import-example td {
+  padding: 8px 12px;
+}
+.import-template-link {
+  margin-top: 17px;
+  white-space: normal;
+}
 .upload-area > .icon {
   width: 28px;
   height: 28px;

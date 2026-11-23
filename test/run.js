@@ -7,6 +7,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const assert = require('assert');
+const XLSX = require('xlsx');
 const { writeXlsx } = require('./gen-xlsx');
 const { renderTemplate, normalizePhone } = require('../src/util');
 
@@ -60,6 +61,11 @@ const mock = (pathname, body) => fetch(MOCK + pathname, body ? { method: 'POST',
 const campaign = async (id) => (await get(`/api/campaigns/${id}`))._body;
 const messages = async (id, q = '') => (await get(`/api/campaigns/${id}/messages?limit=500${q}`)).rows;
 const instances = async () => (await get('/api/instances'))._body;
+function standardXlsx(rows) {
+  const wb = XLSX.read(fs.readFileSync(path.join(ROOT, 'dist/template-contacts.xlsx')), { type: 'buffer' });
+  XLSX.utils.sheet_add_aoa(wb.Sheets['Контакты'], rows, { origin: 'A2' });
+  return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+}
 
 function unitTests() {
   console.log('Юнит-проверки');
@@ -109,6 +115,17 @@ async function apiTests() {
   ok('QR авторизуется со второго запроса, phone подтянут');
   await call('PATCH', `/api/instances/${A.id}`, { daily_limit_start: 10, daily_limit_max: 10, warmup_step: 0 });
   await call('PATCH', `/api/instances/${B.id}`, { enabled: false });
+
+  const previewForm = new FormData();
+  previewForm.append('file', new Blob([standardXlsx([['+7 701 123 45 67', 'Айгуль', 'Алматы']])]), 'contacts.xlsx');
+  const checked = await call('POST', '/api/import-standard/preview', previewForm);
+  assert.deepStrictEqual([checked.http, checked.recipients, checked.phone_column, checked.can_import], [200, 1, 'Телефон (колонка A)', true]);
+  assert.strictEqual(checked.sample[0].phone, '77011234567');
+  const wrongForm = new FormData();
+  wrongForm.append('file', new Blob([standardXlsx([['+7 701 123 45 67', 'Айгуль', 'Алматы']])]), 'contacts.xlsx');
+  wrongForm.append('hash', 'wrong');
+  assert.strictEqual((await call('POST', '/api/import-standard', wrongForm)).http, 400);
+  ok('единый шаблон: колонка A определена точно, проверка без сохранения, хеш обязателен');
 
   console.log('Импорт 92 000 строк');
   const xlsx = path.join(TMP, 'base-92k.xlsx');
@@ -331,6 +348,9 @@ async function apiTests() {
   const gs = await post('/api/import-url', { url: 'https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz012345/edit#gid=0' });
   assert.strictEqual(gs.http, 200, gs.error);
   assert.deepStrictEqual([gs.list_name, gs.valid, gs.duplicates], ['Клиенты из Google', 2, 1]);
+  const recipientsCsv = await call('GET', `/api/lists/${gs.list_id}/recipients.csv`, undefined, true);
+  assert.strictEqual(recipientsCsv.status, 200);
+  assert.match(await recipientsCsv.text(), /\+77018880001/);
   assert.strictEqual((await post('/api/import-url', { url: 'https://docs.google.com/spreadsheets/d/private-sheet-0000000000000000/edit' })).http, 400);
   assert.strictEqual((await post('/api/import-url', { url: 'http://169.254.169.254/latest' })).http, 400);
   ok('импорт по ссылке Google Таблицы; закрытая таблица и посторонние адреса отклоняются');
@@ -418,7 +438,7 @@ async function uiTests() {
     await page.waitForSelector('dialog:has-text("максимальное число номеров")');
     await page.click('dialog [data-act=close]');
 
-    // шаблон → новая рассылка → загрузка базы из Google Таблицы прямо из формы → запуск одной кнопкой
+    // шаблон → новая рассылка → проверка и сохранение базы Excel прямо из формы
     await page.click('a[href="#templates"]');
     await page.waitForSelector('.tpl-card');
     await page.click('[data-act=template-new]');
@@ -430,11 +450,13 @@ async function uiTests() {
     await page.waitForSelector('#campaign-form');
     assert.ok((await page.inputValue('#c-text')).includes('Ответьте СТОП, чтобы отписаться'));
     await page.click('[data-act=form-import]');
-    await page.fill('#import-url', 'https://docs.google.com/spreadsheets/d/1UiSheetAbCdEfGhIjKlMnOpQrStUv/edit');
+    await page.setInputFiles('#import-file', { name: 'ui.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: standardXlsx([['+7 701 888 00 01', 'Дана', 'Астана'], ['8 701 888 00 02', 'Тимур', 'Алматы']]) });
     await page.fill('#import-name', 'UI база');
     await page.click('#import-submit');
     await page.waitForSelector('#import-result .kv');
-    assert.match((await page.textContent('#import-result')).replace(/\s+/g, ' '), /Валидных номеров2.*Дублей в файле1/);
+    assert.match((await page.textContent('#import-result')).replace(/\s+/g, ' '), /Получателей рассылки2/);
+    await page.click('#import-result [data-act=import-confirm]');
+    await page.waitForSelector('#import-result [data-act=form-resume]');
     await page.click('#import-result [data-act=form-resume]');
     await page.waitForSelector('#campaign-form');
     assert.ok((await page.inputValue('#c-text')).includes('{name}'), 'текст сохранился после загрузки базы');
@@ -452,10 +474,16 @@ async function uiTests() {
     await page.click('a[href="#base"]');
     await page.waitForSelector('tr:has-text("UI база")');
     await page.click('.heading-actions [data-act=import]');
-    await page.setInputFiles('#import-file', { name: 'ui.csv', mimeType: 'text/csv', buffer: Buffer.from('phone,name\n+77017770001,UI\n87017770001,Dup\nabc,Bad\n') });
+    await page.setInputFiles('#import-file', { name: 'ui.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: standardXlsx([['+77017770001', 'UI', ''], ['87017770001', 'Dup', ''], ['abc', 'Bad', '']]) });
     await page.click('#import-submit');
     await page.waitForSelector('#import-result .kv');
-    assert.match((await page.textContent('#import-result')).replace(/\s+/g, ' '), /Валидных номеров1.*Дублей в файле1.*Невалидных1/);
+    assert.match((await page.textContent('#import-result')).replace(/\s+/g, ' '), /Дублей1.*Некорректных строк1/);
+    assert.strictEqual(await page.locator('#import-result [data-act=import-confirm]').count(), 0);
+    await page.setInputFiles('#import-file', { name: 'ui.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: standardXlsx([['+77017770001', 'UI', ''], ['87017770001', 'Dup', '']]) });
+    await page.click('#import-submit');
+    await page.waitForSelector('#import-result [data-act=import-confirm]');
+    await page.click('#import-result [data-act=import-confirm]');
+    await page.waitForSelector('#import-result [data-act=form-resume]');
     await page.click('dialog [data-act=close]');
     await page.waitForSelector('tr:has-text("ui")');
 
@@ -479,7 +507,7 @@ async function uiTests() {
     await page.screenshot({ path: path.join(TMP, 'ui-form.png'), animations: 'disabled' });
     assert.deepStrictEqual(errors, []);
   } finally { await browser.close(); }
-  ok(`шаблон → рассылка → база из Google Таблицы → запуск одной кнопкой; QR, импорт, мобильная навигация; ошибок нет (${TMP})`);
+  ok(`шаблон → рассылка → проверка базы Excel → запуск; QR, импорт, мобильная навигация; ошибок нет (${TMP})`);
 }
 
 async function main() {

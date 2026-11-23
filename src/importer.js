@@ -121,10 +121,28 @@ function parseFile(buffer, filename) {
   };
 }
 
+/** Единый шаблон для загрузки: один лист «Контакты», колонки строго A–C. */
+function parseStandardFile(buffer, filename) {
+  if (!/\.xlsx$/i.test(filename || ''))
+    throw Object.assign(new Error('Загрузите файл Excel .xlsx по шаблону'), { status: 400 });
+  let wb;
+  try { wb = XLSX.read(buffer, { type: 'buffer', dense: true, cellDates: true }); }
+  catch { throw Object.assign(new Error('Не удалось открыть Excel-файл. Скачайте шаблон и сохраните его как .xlsx'), { status: 400 }); }
+  if (wb.SheetNames.length !== 1 || wb.SheetNames[0] !== 'Контакты')
+    throw Object.assign(new Error('В файле должен быть один лист с названием «Контакты»'), { status: 400 });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets['Контакты'], { header: 1, raw: true, defval: '', blankrows: false });
+  const headers = (rows[0] || []).map(cellText);
+  if (headers.length !== 3 || headers[0] !== 'Телефон' || headers[1] !== 'Имя' || headers[2] !== 'Город')
+    throw Object.assign(new Error('Первая строка должна содержать ровно три колонки: Телефон, Имя, Город — в этом порядке'), { status: 400 });
+  if (rows.slice(1).some((row) => row.slice(3).some((cell) => cellText(cell) !== '')))
+    throw Object.assign(new Error('В шаблоне предусмотрены только три колонки: Телефон, Имя, Город'), { status: 400 });
+  return parseFile(buffer, filename);
+}
+
 /** Импорт в базу: upsert по phone, vars — через json_patch, всё в одной транзакции */
-function importFile(buffer, filename, listName) {
+function importFile(buffer, filename, listName, parser = parseFile) {
   const t0 = Date.now();
-  const parsed = parseFile(buffer, filename);
+  const parsed = parser(buffer, filename);
   if (!parsed.contacts.length) {
     throw Object.assign(new Error(`В файле нет валидных номеров (строк: ${parsed.rows})`), { status: 400 });
   }
@@ -164,4 +182,4 @@ function importFile(buffer, filename, listName) {
   };
 }
 
-module.exports = { importFile, parseFile, decodeText, parseCsv };
+module.exports = { importFile, parseFile, parseStandardFile, decodeText, parseCsv };

@@ -7,7 +7,7 @@ const multer = require('multer');
 
 const { db, MEDIA_DIR, logEvent, getSetting, setSetting } = require('./db');
 const { client } = require('./greenapi');
-const { importFile } = require('./importer');
+const { importFile, parseStandardFile } = require('./importer');
 const worker = require('./worker');
 const { handleWebhook, optOut } = require('./webhooks');
 const {
@@ -253,8 +253,12 @@ app.post('/api/instances/:id/test', wrap(async (req, res) => {
   const inst = getInstance(req.params.id);
   const phone = normalizePhone(req.body?.phone);
   const text = String(req.body?.text || '').trim();
+  if (inst.state !== 'authorized' || !inst.enabled) throw bad('Этот номер WhatsApp сейчас не подключён');
   if (!phone) throw bad('Некорректный номер телефона');
   if (!text) throw bad('Введите текст сообщения');
+  if (text.length > 4000) throw bad('Сообщение не должно быть длиннее 4000 символов');
+  if (db.prepare('SELECT 1 FROM contacts WHERE phone = ? AND opted_out = 1').get(phone))
+    throw bad('Получатель отписался от сообщений');
   let r;
   try { r = await client(inst).sendMessage(phone, text); } catch (e) { throw greenError(e); }
   logEvent(`Тестовая отправка с «${inst.name}» на ${phone}`, 'info', inst.id);
@@ -279,10 +283,60 @@ app.delete('/api/instances/:id', wrap(async (req, res) => {
 // ───────── Базы и импорт ─────────
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024, files: 1 } });
 const fixName = (s) => Buffer.from(String(s || ''), 'latin1').toString('utf8'); // multer отдаёт имя в latin1
+const fileHash = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
+
+app.post('/api/import-standard/preview', upload.single('file'), (req, res) => {
+  if (!req.file) throw bad('Выберите файл Excel .xlsx');
+  const parsed = parseStandardFile(req.file.buffer, fixName(req.file.originalname));
+  const optedOut = new Set(db.prepare('SELECT phone FROM contacts WHERE opted_out = 1').all().map((r) => r.phone));
+  const recipients = parsed.contacts.filter((c) => !optedOut.has(c.phone));
+  res.json({
+    hash: fileHash(req.file.buffer),
+    rows: parsed.rows,
+    valid: parsed.contacts.length,
+    duplicates: parsed.duplicates,
+    invalid: parsed.invalid,
+    invalid_examples: parsed.invalidExamples,
+    opted_out: parsed.contacts.length - recipients.length,
+    recipients: recipients.length,
+    phone_column: 'Телефон (колонка A)',
+    sample: recipients.slice(0, 10).map((c) => ({ phone: c.phone, name: c.name })),
+    can_import: recipients.length > 0 && parsed.invalid === 0,
+  });
+});
+
+app.post('/api/import-standard', upload.single('file'), (req, res) => {
+  if (!req.file) throw bad('Выберите файл Excel .xlsx');
+  const filename = fixName(req.file.originalname);
+  const parsed = parseStandardFile(req.file.buffer, filename);
+  if (parsed.invalid) throw bad(`Исправьте строки без корректного телефона: ${parsed.invalid}`);
+  if (!parsed.contacts.length) throw bad('Добавьте хотя бы один номер в шаблон');
+  if (String(req.body?.hash || '') !== fileHash(req.file.buffer)) throw bad('Файл изменился после проверки. Проверьте его ещё раз');
+  const listName = String(req.body?.name || '').trim().slice(0, 120) || filename.replace(/\.xlsx$/i, '');
+  const result = importFile(req.file.buffer, filename, listName, parseStandardFile);
+  logEvent(`Импорт «${listName}» по шаблону: получателей ${result.valid - result.opted_out}, дублей ${result.duplicates}`);
+  res.json(result);
+});
 
 app.get('/api/lists', (req, res) => {
   res.json(db.prepare(`SELECT l.*, (SELECT COUNT(*) FROM list_contacts lc WHERE lc.list_id = l.id) AS contacts
     FROM lists l ORDER BY l.id DESC`).all());
+});
+
+app.get('/api/lists/:id/recipients.csv', (req, res) => {
+  const list = db.prepare('SELECT id FROM lists WHERE id = ?').get(Number(req.params.id));
+  if (!list) throw new HttpError(404, 'База не найдена');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.attachment('recipients.csv');
+  res.write('\uFEFF' + ['Телефон', 'Имя', 'Город'].map(csvCell).join(';') + '\r\n');
+  const rows = db.prepare(`SELECT c.phone, c.name, c.vars FROM list_contacts lc
+    JOIN contacts c ON c.id = lc.contact_id
+    WHERE lc.list_id = ? AND c.opted_out = 0 ORDER BY lc.contact_id`).iterate(list.id);
+  for (const row of rows) {
+    const vars = JSON.parse(row.vars || '{}');
+    res.write([`+${row.phone}`, row.name, vars['город'] || ''].map(csvCell).join(';') + '\r\n');
+  }
+  res.end();
 });
 
 app.post('/api/import', upload.single('file'), (req, res) => {
