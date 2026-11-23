@@ -3,6 +3,6 @@ data
 .git
 .env
 test
-*.xlsx
+test-*.xlsx
 *.md
 .openai

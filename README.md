@@ -18,6 +18,10 @@ docker compose up -d --build
 Обновление: `git pull && docker compose up -d --build`.
 Резервная копия: `docker compose exec pulse node -e "require('better-sqlite3')('/data/app.db').backup('/data/backup.db').then(()=>console.log('ok'))"` и скопируйте `/data/backup.db`.
 
+### Railway
+
+Подключите GitHub-репозиторий к сервису: Railway использует корневой `Dockerfile`. Добавьте **Railway Volume** с точкой монтирования `/data` — там хранятся SQLite-база и загруженные медиафайлы. Директива Docker `VOLUME` для Railway не используется. В Variables задайте как минимум `ADMIN_PASSWORD` и `SESSION_SECRET`; для WhatsApp-вебхуков также нужны `PUBLIC_URL` (публичный HTTPS-адрес сервиса) и `WEBHOOK_SECRET`. `PORT` Railway передаёт автоматически. После изменения переменных или подключения тома запустите новый деплой.
+
 ### Без Docker
 
 Нужен Node.js 20+.

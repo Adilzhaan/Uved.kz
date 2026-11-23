@@ -11,9 +11,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY src ./src
 COPY dist ./dist
 
-RUN mkdir -p /data && chown -R node:node /data /app
-USER node
-VOLUME /data
+RUN mkdir -p /data
+# Railway монтирует Volume от root; процессу нужен доступ на запись в /data.
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
