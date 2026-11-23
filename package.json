@@ -3,7 +3,9 @@
   "version": "2.0.0",
   "private": true,
   "description": "Pulse — сервис массовой WhatsApp-рассылки через GREEN-API",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --env-file=.env src/server.js",
@@ -13,10 +15,10 @@
     "check": "for f in src/*.js test/*.js dist/app.js; do node --check $f || exit 1; done"
   },
   "dependencies": {
-    "better-sqlite3": "^12.4.1",
     "cookie-parser": "^1.4.7",
     "express": "^4.21.2",
     "multer": "^2.0.2",
+    "pg": "^8.23.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {

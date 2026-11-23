@@ -29,17 +29,17 @@ function parseCsv(text) {
     const c = text[i];
     if (quoted) {
       if (c === '"') {
-        if (text[i + 1] === '"') { cell += '"'; i++; } else quoted = false;
+        if (text[i + 1] === '"') {cell += '"';i++;} else quoted = false;
       } else cell += c;
-    } else if (c === '"' && cell === '') quoted = true;
-    else if (c === delimiter) { row.push(cell); cell = ''; }
-    else if (c === '\n' || c === '\r') {
+    } else if (c === '"' && cell === '') quoted = true;else
+    if (c === delimiter) {row.push(cell);cell = '';} else
+    if (c === '\n' || c === '\r') {
       if (c === '\r' && text[i + 1] === '\n') i++;
-      row.push(cell); cell = '';
-      rows.push(row); row = [];
+      row.push(cell);cell = '';
+      rows.push(row);row = [];
     } else cell += c;
   }
-  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  if (cell !== '' || row.length) {row.push(cell);rows.push(row);}
   return rows;
 }
 
@@ -87,7 +87,7 @@ function parseFile(buffer, filename) {
     let best = 0;
     for (let i = 0; i < width; i++) {
       const s = score(i);
-      if (s > best) { best = s; phoneCol = i; }
+      if (s > best) {best = s;phoneCol = i;}
     }
   }
   if (phoneCol < 0) throw Object.assign(new Error('Не найдена колонка с телефонами'), { status: 400 });
@@ -105,7 +105,7 @@ function parseFile(buffer, filename) {
       if (invalidExamples.length < 10) invalidExamples.push(cellText(r[phoneCol]).slice(0, 40));
       continue;
     }
-    if (seen.has(phone)) { duplicates++; continue; }
+    if (seen.has(phone)) {duplicates++;continue;}
     seen.add(phone);
     const vars = {};
     for (let i = 0; i < width; i++) {
@@ -117,51 +117,57 @@ function parseFile(buffer, filename) {
   }
   return {
     contacts, rows: data.length, invalid, invalidExamples, duplicates,
-    phoneColumn: headers[phoneCol], nameColumn: nameCol >= 0 ? headers[nameCol] : null, hasHeader,
+    phoneColumn: headers[phoneCol], nameColumn: nameCol >= 0 ? headers[nameCol] : null, hasHeader
   };
 }
 
 /** Единый шаблон для загрузки: один лист «Контакты», колонки строго A–C. */
 function parseStandardFile(buffer, filename) {
   if (!/\.xlsx$/i.test(filename || ''))
-    throw Object.assign(new Error('Загрузите файл Excel .xlsx по шаблону'), { status: 400 });
+  throw Object.assign(new Error('Загрузите файл Excel .xlsx по шаблону'), { status: 400 });
   let wb;
-  try { wb = XLSX.read(buffer, { type: 'buffer', dense: true, cellDates: true }); }
-  catch { throw Object.assign(new Error('Не удалось открыть Excel-файл. Скачайте шаблон и сохраните его как .xlsx'), { status: 400 }); }
+  try {wb = XLSX.read(buffer, { type: 'buffer', dense: true, cellDates: true });}
+  catch {throw Object.assign(new Error('Не удалось открыть Excel-файл. Скачайте шаблон и сохраните его как .xlsx'), { status: 400 });}
   if (wb.SheetNames.length !== 1 || wb.SheetNames[0] !== 'Контакты')
-    throw Object.assign(new Error('В файле должен быть один лист с названием «Контакты»'), { status: 400 });
+  throw Object.assign(new Error('В файле должен быть один лист с названием «Контакты»'), { status: 400 });
   const rows = XLSX.utils.sheet_to_json(wb.Sheets['Контакты'], { header: 1, raw: true, defval: '', blankrows: false });
   const headers = (rows[0] || []).map(cellText);
   if (headers.length !== 3 || headers[0] !== 'Телефон' || headers[1] !== 'Имя' || headers[2] !== 'Город')
-    throw Object.assign(new Error('Первая строка должна содержать ровно три колонки: Телефон, Имя, Город — в этом порядке'), { status: 400 });
+  throw Object.assign(new Error('Первая строка должна содержать ровно три колонки: Телефон, Имя, Город — в этом порядке'), { status: 400 });
   if (rows.slice(1).some((row) => row.slice(3).some((cell) => cellText(cell) !== '')))
-    throw Object.assign(new Error('В шаблоне предусмотрены только три колонки: Телефон, Имя, Город'), { status: 400 });
+  throw Object.assign(new Error('В шаблоне предусмотрены только три колонки: Телефон, Имя, Город'), { status: 400 });
   return parseFile(buffer, filename);
 }
 
-/** Импорт в базу: upsert по phone, vars — через json_patch, всё в одной транзакции */
-function importFile(buffer, filename, listName, parser = parseFile) {
+/** Импорт в базу пакетами, с привязкой к списку в одной транзакции. */
+async function importFile(buffer, filename, listName, parser = parseFile) {
   const t0 = Date.now();
   const parsed = parser(buffer, filename);
   if (!parsed.contacts.length) {
     throw Object.assign(new Error(`В файле нет валидных номеров (строк: ${parsed.rows})`), { status: 400 });
   }
   const upsert = db.prepare(`
-    INSERT INTO contacts(phone, name, vars) VALUES (@phone, @name, @vars)
-    ON CONFLICT(phone) DO UPDATE SET
-      name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE contacts.name END,
-      vars = json_patch(contacts.vars, excluded.vars)
-    RETURNING id`);
-  const link = db.prepare('INSERT OR IGNORE INTO list_contacts(list_id, contact_id) VALUES (?, ?)');
+    WITH updated AS (
+      INSERT INTO contacts(phone, name, vars)
+      SELECT phone, name, vars FROM jsonb_to_recordset(?::jsonb) AS x(phone text, name text, vars text)
+      ON CONFLICT(phone) DO UPDATE SET
+        name = CASE WHEN excluded.name <> '' THEN excluded.name ELSE contacts.name END,
+        vars = (contacts.vars::jsonb || excluded.vars::jsonb)::text
+      RETURNING id
+    )
+    INSERT INTO list_contacts(list_id, contact_id)
+    SELECT ?, id FROM updated ON CONFLICT DO NOTHING`);
   const countAll = db.prepare('SELECT COUNT(*) n FROM contacts');
 
-  const result = db.transaction(() => {
-    const before = countAll.get().n;
-    const listId = db.prepare('INSERT INTO lists(name, created_at) VALUES (?, ?)').run(listName, Date.now()).lastInsertRowid;
-    for (const c of parsed.contacts) link.run(listId, upsert.get(c).id);
-    const added = countAll.get().n - before;
-    const optedOut = db.prepare(`SELECT COUNT(*) n FROM list_contacts lc JOIN contacts c ON c.id = lc.contact_id
-      WHERE lc.list_id = ? AND c.opted_out = 1`).get(listId).n;
+  const result = await db.transaction(async () => {
+    const before = (await countAll.get()).n;
+    const listId = (await db.prepare('INSERT INTO lists(name, created_at) VALUES (?, ?)').run(listName, Date.now())).lastInsertRowid;
+    for (let i = 0; i < parsed.contacts.length; i += 1000) {
+      await upsert.run(JSON.stringify(parsed.contacts.slice(i, i + 1000)), listId);
+    }
+    const added = (await countAll.get()).n - before;
+    const optedOut = (await db.prepare(`SELECT COUNT(*) n FROM list_contacts lc JOIN contacts c ON c.id = lc.contact_id
+      WHERE lc.list_id = ? AND c.opted_out = 1`).get(listId)).n;
     return { listId: Number(listId), added, optedOut };
   })();
 
@@ -178,7 +184,7 @@ function importFile(buffer, filename, listName, parser = parseFile) {
     opted_out: result.optedOut,
     phone_column: parsed.phoneColumn,
     name_column: parsed.nameColumn,
-    ms: Date.now() - t0,
+    ms: Date.now() - t0
   };
 }
 

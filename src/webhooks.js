@@ -4,55 +4,55 @@ const worker = require('./worker');
 
 const RANK = { sent: 1, delivered: 2, read: 3 };
 
-function instanceByWebhook(body) {
+async function instanceByWebhook(body) {
   const idInstance = body?.instanceData?.idInstance;
   if (idInstance == null) return null;
-  return db.prepare('SELECT * FROM instances WHERE id_instance = ?').get(String(idInstance)) || null;
+  return (await db.prepare('SELECT * FROM instances WHERE id_instance = ?').get(String(idInstance))) || null;
 }
 
 function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 /** Стоп-слово как отдельное слово (границы — не буква и не цифра, Unicode) */
-function stopRegex() {
-  const words = getSetting('stop_words').split(/[,\n;]+/).map((w) => w.trim()).filter(Boolean);
+async function stopRegex() {
+  const words = (await getSetting('stop_words')).split(/[,\n;]+/).map((w) => w.trim()).filter(Boolean);
   if (!words.length) return null;
   return new RegExp(`(?<![\\p{L}\\p{N}])(?:${words.map(escapeRe).join('|')})(?![\\p{L}\\p{N}])`, 'iu');
 }
 
 /** Добавить номер в стоп-лист; все его pending → skipped */
-function optOut(phone, source) {
-  return db.transaction(() => {
+async function optOut(phone, source) {
+  return await db.transaction(async () => {
     const now = Date.now();
-    db.prepare(`INSERT INTO contacts(phone, opted_out, opted_out_at) VALUES (?, 1, ?)
+    await db.prepare(`INSERT INTO contacts(phone, opted_out, opted_out_at) VALUES (?, 1, ?)
       ON CONFLICT(phone) DO UPDATE SET opted_out = 1, opted_out_at = COALESCE(contacts.opted_out_at, excluded.opted_out_at)`).run(phone, now);
-    const r = db.prepare("UPDATE messages SET status = 'skipped', error = 'контакт в стоп-листе' WHERE phone = ? AND status = 'pending'").run(phone);
-    logEvent(`${phone} добавлен в стоп-лист (${source}); снято из очереди: ${r.changes}`);
+    const r = await db.prepare("UPDATE messages SET status = 'skipped', error = 'контакт в стоп-листе' WHERE phone = ? AND status = 'pending'").run(phone);
+    await logEvent(`${phone} добавлен в стоп-лист (${source}); снято из очереди: ${r.changes}`);
     return r.changes;
   })();
 }
 
-function onOutgoingStatus(body) {
+async function onOutgoingStatus(body) {
   const status = body.status;
   if (status === 'yellowCard') {
-    const inst = instanceByWebhook(body);
-    if (inst) worker.stopInstance(inst.id, 'Жёлтая карточка WhatsApp (yellowCard)');
+    const inst = await instanceByWebhook(body);
+    if (inst) await worker.stopInstance(inst.id, 'Жёлтая карточка WhatsApp (yellowCard)');
   }
   const idMessage = body.idMessage;
   if (!idMessage) return;
-  const msg = db.prepare('SELECT id, status FROM messages WHERE id_message = ?').get(String(idMessage));
+  const msg = await db.prepare('SELECT id, status FROM messages WHERE id_message = ?').get(String(idMessage));
   if (!msg) return;
   if (RANK[status]) {
     // sent < delivered < read — статус только повышается
     if (RANK[msg.status] && RANK[status] > RANK[msg.status]) {
-      db.prepare('UPDATE messages SET status = ? WHERE id = ?').run(status, msg.id);
+      await db.prepare('UPDATE messages SET status = ? WHERE id = ?').run(status, msg.id);
     }
   } else if (status === 'noAccount') {
-    db.prepare("UPDATE messages SET status = 'no_wa' WHERE id = ?").run(msg.id);
+    await db.prepare("UPDATE messages SET status = 'no_wa' WHERE id = ?").run(msg.id);
   } else if (status === 'failed' || status === 'yellowCard') {
     if (msg.status === 'sent') {
-      db.prepare("UPDATE messages SET status = 'failed', error = ? WHERE id = ?")
-        .run(String(body.description || status).slice(0, 500), msg.id);
+      await db.prepare("UPDATE messages SET status = 'failed', error = ? WHERE id = ?").
+      run(String(body.description || status).slice(0, 500), msg.id);
     }
   }
 }
@@ -66,39 +66,39 @@ function incomingText(md) {
     md.imageMessageData?.caption ||
     md.videoMessageData?.caption ||
     md.documentMessageData?.caption ||
-    ''
-  );
+    '');
+
 }
 
-function onIncoming(body) {
+async function onIncoming(body) {
   const chatId = String(body?.senderData?.chatId || '');
   if (!chatId.endsWith('@c.us')) return; // группы и рассылки игнорируем
   const phone = chatId.replace(/\D/g, '');
   if (!phone) return;
   const text = String(incomingText(body.messageData) || '').slice(0, 4000);
-  const inst = instanceByWebhook(body);
-  const re = stopRegex();
+  const inst = await instanceByWebhook(body);
+  const re = await stopRegex();
   const isStop = !!(re && text && re.test(text));
-  db.prepare('INSERT INTO incoming(instance_id, phone, name, text, is_stop, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(inst?.id ?? null, phone, String(body.senderData.senderName || body.senderData.chatName || '').slice(0, 200), text, isStop ? 1 : 0, Date.now());
-  db.prepare(`UPDATE messages SET replied = 1 WHERE id = (
+  await db.prepare('INSERT INTO incoming(instance_id, phone, name, text, is_stop, created_at) VALUES (?, ?, ?, ?, ?, ?)').
+  run(inst?.id ?? null, phone, String(body.senderData.senderName || body.senderData.chatName || '').slice(0, 200), text, isStop ? 1 : 0, Date.now());
+  await db.prepare(`UPDATE messages SET replied = 1 WHERE id = (
     SELECT id FROM messages WHERE phone = ? AND sent_at IS NOT NULL ORDER BY sent_at DESC, id DESC LIMIT 1)`).run(phone);
-  if (isStop) optOut(phone, 'ответ со стоп-словом');
+  if (isStop) await optOut(phone, 'ответ со стоп-словом');
 }
 
-function onStateChanged(body) {
-  const inst = instanceByWebhook(body);
+async function onStateChanged(body) {
+  const inst = await instanceByWebhook(body);
   const state = body.stateInstance;
   if (!inst || !state) return;
-  worker.applyState(inst.id, String(state), state === 'notAuthorized' ? null : undefined);
+  await worker.applyState(inst.id, String(state), state === 'notAuthorized' ? null : undefined);
 }
 
 function handleWebhook(body) {
   if (!body || typeof body !== 'object') return;
   switch (body.typeWebhook) {
-    case 'outgoingMessageStatus': return onOutgoingStatus(body);
-    case 'incomingMessageReceived': return onIncoming(body);
-    case 'stateInstanceChanged': return onStateChanged(body);
+    case 'outgoingMessageStatus':return onOutgoingStatus(body);
+    case 'incomingMessageReceived':return onIncoming(body);
+    case 'stateInstanceChanged':return onStateChanged(body);
     default:
   }
 }

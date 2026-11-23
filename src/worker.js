@@ -15,7 +15,7 @@ const BAD_STATES = new Set(['blocked', 'yellowCard']);
 const runtime = new Map(); // instance.id → { nextAt, busy, errors }
 function rt(id) {
   let s = runtime.get(id);
-  if (!s) runtime.set(id, (s = { nextAt: 0, busy: false, errors: 0 }));
+  if (!s) runtime.set(id, s = { nextAt: 0, busy: false, errors: 0 });
   return s;
 }
 function resetInstance(id) {
@@ -30,16 +30,16 @@ function dailyLimit(inst, today = dayInTz()) {
   return Math.min(inst.daily_limit_max, inst.daily_limit_start + inst.warmup_step * days);
 }
 const qCount = db.prepare('SELECT count FROM daily_counts WHERE instance_id = ? AND day = ?');
-function sentToday(instanceId, today = dayInTz()) {
-  return qCount.get(instanceId, today)?.count || 0;
+async function sentToday(instanceId, today = dayInTz()) {
+  return (await qCount.get(instanceId, today))?.count || 0;
 }
 
 /** Автостоп номера: enabled=0 + причина + запись в журнал */
-function stopInstance(id, reason) {
-  const r = db.prepare('UPDATE instances SET enabled = 0, disabled_reason = ? WHERE id = ? AND enabled = 1').run(reason, id);
+async function stopInstance(id, reason) {
+  const r = await db.prepare('UPDATE instances SET enabled = 0, disabled_reason = ? WHERE id = ? AND enabled = 1').run(reason, id);
   if (r.changes) {
-    const inst = db.prepare('SELECT name FROM instances WHERE id = ?').get(id);
-    logEvent(`Номер «${inst?.name || id}» остановлен: ${reason}`, 'error', id);
+    const inst = await db.prepare('SELECT name FROM instances WHERE id = ?').get(id);
+    await logEvent(`Номер «${inst?.name || id}» остановлен: ${reason}`, 'error', id);
   }
   resetInstance(id);
 }
@@ -52,7 +52,7 @@ const qRequeue = db.prepare("UPDATE messages SET status = 'pending', error = ? W
 const qFinal = db.prepare("UPDATE messages SET status = ?, error = ? WHERE id = ? AND status = 'sending'");
 const qSent = db.prepare("UPDATE messages SET status = 'sent', id_message = ?, text = ?, sent_at = ?, error = NULL WHERE id = ? AND status = 'sending'");
 const qInc = db.prepare(`INSERT INTO daily_counts(instance_id, day, count) VALUES (?, ?, 1)
-  ON CONFLICT(instance_id, day) DO UPDATE SET count = count + 1`);
+  ON CONFLICT(instance_id, day) DO UPDATE SET count = daily_counts.count + 1`);
 const qFirstDay = db.prepare('UPDATE instances SET first_send_day = ? WHERE id = ? AND first_send_day IS NULL');
 const qContact = db.prepare('SELECT * FROM contacts WHERE id = ?');
 const qFinish = db.prepare(`
@@ -60,23 +60,23 @@ const qFinish = db.prepare(`
   WHERE id = ? AND status = 'running'
     AND NOT EXISTS (SELECT 1 FROM messages WHERE campaign_id = campaigns.id AND status IN ('pending', 'sending'))`);
 
-function finishIfDone(campaign) {
-  if (qFinish.run(Date.now(), campaign.id).changes) {
-    logEvent(`Кампания «${campaign.name}» завершена`);
+async function finishIfDone(campaign) {
+  if ((await qFinish.run(Date.now(), campaign.id)).changes) {
+    await logEvent(`Кампания «${campaign.name}» завершена`);
     return true;
   }
   return false;
 }
 
 function parseVars(json) {
-  try { return JSON.parse(json) || {}; } catch { return {}; }
+  try {return JSON.parse(json) || {};} catch {return {};}
 }
 
 async function processMessage(inst, camp, msg) {
   const s = rt(inst.id);
-  const contact = qContact.get(msg.contact_id);
+  const contact = await qContact.get(msg.contact_id);
   if (!contact || contact.opted_out) {
-    qFinal.run('skipped', contact ? 'контакт в стоп-листе' : 'контакт удалён', msg.id);
+    await qFinal.run('skipped', contact ? 'контакт в стоп-листе' : 'контакт удалён', msg.id);
     return;
   }
   const api = client(inst);
@@ -84,24 +84,24 @@ async function processMessage(inst, camp, msg) {
     if (camp.check_wa) {
       const r = await api.checkWhatsapp(msg.phone);
       if (r && r.existsWhatsapp === false) {
-        qFinal.run('no_wa', null, msg.id);
+        await qFinal.run('no_wa', null, msg.id);
         s.errors = 0;
         s.nextAt = Date.now() + Math.min(3, MIN_DELAY_SEC) * 1000;
         return;
       }
     }
     const text = renderTemplate(camp.text, { ...parseVars(contact.vars), name: contact.name, phone: contact.phone });
-    const r = camp.media_url
-      ? await api.sendFileByUrl(msg.phone, camp.media_url, camp.media_name || 'file', text)
-      : await api.sendMessage(msg.phone, text);
+    const r = camp.media_url ?
+    await api.sendFileByUrl(msg.phone, camp.media_url, camp.media_name || 'file', text) :
+    await api.sendMessage(msg.phone, text);
     if (!r || !r.idMessage) throw new Error('GREEN-API не вернул idMessage');
 
     const now = Date.now();
     const today = dayInTz(now);
-    db.transaction(() => {
-      qSent.run(String(r.idMessage), text, now, msg.id);
-      qInc.run(inst.id, today);
-      qFirstDay.run(today, inst.id);
+    await db.transaction(async () => {
+      await qSent.run(String(r.idMessage), text, now, msg.id);
+      await qInc.run(inst.id, today);
+      await qFirstDay.run(today, inst.id);
     })();
     s.errors = 0;
     const lo = Math.max(MIN_DELAY_SEC, camp.delay_min);
@@ -111,31 +111,32 @@ async function processMessage(inst, camp, msg) {
     const status = e.status;
     const text = String(e.message || e).slice(0, 500);
     if (status === 466) {
-      qRequeue.run(text, msg.id);
-      stopInstance(inst.id, 'Исчерпан тариф GREEN-API (466)');
+      await qRequeue.run(text, msg.id);
+      await stopInstance(inst.id, 'Исчерпан тариф GREEN-API (466)');
     } else if (status === 401 || status === 403) {
-      qRequeue.run(text, msg.id);
-      stopInstance(inst.id, `GREEN-API отклонил авторизацию (${status})`);
+      await qRequeue.run(text, msg.id);
+      await stopInstance(inst.id, `GREEN-API отклонил авторизацию (${status})`);
     } else if (status === 400) {
-      qFinal.run('failed', text, msg.id);
+      await qFinal.run('failed', text, msg.id);
       s.errors++;
       s.nextAt = Date.now() + Math.max(MIN_DELAY_SEC, camp.delay_min) * 1000;
     } else {
       // сеть, 429, 5xx — сообщение обратно в очередь, номер отдыхает
-      qRequeue.run(text, msg.id);
+      await qRequeue.run(text, msg.id);
       s.errors++;
       s.nextAt = Date.now() + RETRY_DELAY_SEC * 1000;
     }
-    if (s.errors >= MAX_ERRORS) stopInstance(inst.id, `${MAX_ERRORS} ошибок подряд. Последняя: ${text}`);
+    if (s.errors >= MAX_ERRORS) await stopInstance(inst.id, `${MAX_ERRORS} ошибок подряд. Последняя: ${text}`);
   }
 }
 
-function tick() {
-  const camps = db.prepare("SELECT * FROM campaigns WHERE status = 'running' ORDER BY id").all();
+async function tick() {
+  const camps = await db.prepare("SELECT * FROM campaigns WHERE status = 'running' ORDER BY id").all();
   if (!camps.length) return;
-  const active = camps.filter((c) => !finishIfDone(c));
+  const done = await Promise.all(camps.map(finishIfDone));
+  const active = camps.filter((_, i) => !done[i]);
   if (!active.length) return;
-  const insts = db.prepare("SELECT * FROM instances WHERE enabled = 1 AND state = 'authorized'").all();
+  const insts = await db.prepare("SELECT * FROM instances WHERE enabled = 1 AND state = 'authorized'").all();
   const now = Date.now();
   const today = dayInTz(now);
   const hour = hourInTz(now);
@@ -143,22 +144,22 @@ function tick() {
   for (const inst of insts) {
     const s = rt(inst.id);
     if (s.busy || now < s.nextAt) continue;
-    if (sentToday(inst.id, today) >= dailyLimit(inst, today)) continue;
+    if ((await sentToday(inst.id, today)) >= dailyLimit(inst, today)) continue;
     for (const camp of active) {
       let ids = [];
-      try { ids = JSON.parse(camp.instance_ids) || []; } catch { /* пусто = все номера */ }
+      try {ids = JSON.parse(camp.instance_ids) || [];} catch {/* пусто = все номера */}
       if (ids.length && !ids.includes(inst.id)) continue;
       if (!(hour >= camp.hour_from && hour < camp.hour_to)) continue;
-      const msg = qClaim.get(inst.id, camp.id);
+      const msg = await qClaim.get(inst.id, camp.id);
       if (!msg) continue;
       s.busy = true;
-      processMessage(inst, camp, msg)
-        .catch((e) => {
-          qRequeue.run(String(e.message || e).slice(0, 500), msg.id);
-          logEvent(`Сбой воркера: ${e.message}`, 'error', inst.id);
-          s.nextAt = Date.now() + RETRY_DELAY_SEC * 1000;
-        })
-        .finally(() => { s.busy = false; });
+      processMessage(inst, camp, msg).
+      catch(async (e) => {
+        await qRequeue.run(String(e.message || e).slice(0, 500), msg.id);
+        await logEvent(`Сбой воркера: ${e.message}`, 'error', inst.id);
+        s.nextAt = Date.now() + RETRY_DELAY_SEC * 1000;
+      }).
+      finally(() => {s.busy = false;});
       break;
     }
   }
@@ -168,40 +169,38 @@ function tick() {
 async function refreshInstance(inst) {
   const api = client(inst);
   const r = await api.getStateInstance();
-  const state = (r && r.stateInstance) || 'unknown';
+  const state = r && r.stateInstance || 'unknown';
   let phone = inst.phone;
   if (state === 'authorized' && !phone) {
     try {
       const w = await api.getWaSettings();
-      phone = String((w && (w.phone || w.wid)) || '').replace(/\D/g, '') || null;
-    } catch { /* не критично */ }
+      phone = String(w && (w.phone || w.wid) || '').replace(/\D/g, '') || null;
+    } catch {/* не критично */}
   }
   if (state !== 'authorized') phone = state === 'notAuthorized' ? null : phone;
-  applyState(inst.id, state, phone);
+  await applyState(inst.id, state, phone);
   return state;
 }
 
-function applyState(id, state, phone) {
-  const prev = db.prepare('SELECT state, name, phone FROM instances WHERE id = ?').get(id);
+async function applyState(id, state, phone) {
+  const prev = await db.prepare('SELECT state, name, phone FROM instances WHERE id = ?').get(id);
   if (!prev) return;
-  db.prepare('UPDATE instances SET state = ?, phone = ? WHERE id = ?').run(state, phone === undefined ? prev.phone : phone, id);
-  if (prev.state !== state) logEvent(`Номер «${prev.name}»: состояние ${prev.state} → ${state}`, BAD_STATES.has(state) ? 'error' : 'info', id);
-  if (BAD_STATES.has(state)) stopInstance(id, `Состояние номера: ${state}`);
+  await db.prepare('UPDATE instances SET state = ?, phone = ? WHERE id = ?').run(state, phone === undefined ? prev.phone : phone, id);
+  if (prev.state !== state) await logEvent(`Номер «${prev.name}»: состояние ${prev.state} → ${state}`, BAD_STATES.has(state) ? 'error' : 'info', id);
+  if (BAD_STATES.has(state)) await stopInstance(id, `Состояние номера: ${state}`);
 }
 
 async function pollStates() {
-  const insts = db.prepare('SELECT * FROM instances').all();
+  const insts = await db.prepare('SELECT * FROM instances').all();
   await Promise.all(insts.map((i) => refreshInstance(i).catch(() => {})));
 }
 
 let timers = [];
-function start() {
+async function start() {
   // при старте сервера все «sending» возвращаем в очередь
-  const r = db.prepare("UPDATE messages SET status = 'pending' WHERE status = 'sending'").run();
-  if (r.changes) logEvent(`После перезапуска возвращено в очередь: ${r.changes}`, 'warn');
-  timers.push(setInterval(() => {
-    try { tick(); } catch (e) { console.error('tick', e); }
-  }, TICK_MS));
+  const r = await db.prepare("UPDATE messages SET status = 'pending' WHERE status = 'sending'").run();
+  if (r.changes) await logEvent(`После перезапуска возвращено в очередь: ${r.changes}`, 'warn');
+  timers.push(setInterval(() => tick().catch((e) => console.error('tick', e)), TICK_MS));
   timers.push(setInterval(() => pollStates().catch(() => {}), POLL_SEC * 1000));
   pollStates().catch(() => {});
 }
@@ -212,5 +211,5 @@ function stop() {
 
 module.exports = {
   start, stop, tick, stopInstance, resetInstance, refreshInstance, applyState, pollStates,
-  dailyLimit, sentToday, MIN_DELAY_SEC, BAD_STATES,
+  dailyLimit, sentToday, MIN_DELAY_SEC, BAD_STATES
 };

@@ -8,6 +8,7 @@ const os = require('os');
 const path = require('path');
 const assert = require('assert');
 const XLSX = require('xlsx');
+const { Pool } = require('pg');
 const { writeXlsx } = require('./gen-xlsx');
 const { renderTemplate, normalizePhone } = require('../src/util');
 
@@ -18,6 +19,8 @@ const BASE = `http://127.0.0.1:${PORT}`;
 const MOCK = `http://127.0.0.1:${MOCK_PORT}`;
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-test-'));
 const children = [];
+let testPool;
+let testSchema;
 let cookie = '';
 let passed = 0;
 
@@ -84,6 +87,7 @@ function unitTests() {
 
 async function apiTests() {
   console.log('Авторизация');
+  assert.strictEqual((await get('/health')).status, 200);
   assert.strictEqual((await get('/api/instances')).status, 401);
   assert.strictEqual((await post('/api/login', { login: 'boss', password: 'wrong' })).status, 401);
   assert.strictEqual((await post('/api/login', { login: 'other', password: 'testpass' })).status, 401);
@@ -369,18 +373,13 @@ async function apiTests() {
 
 async function restartTest(startServer) {
   console.log('Перезапуск сервера');
-  const Database = require('better-sqlite3');
   children[1].kill('SIGTERM');
   await new Promise((r) => children[1].once('exit', r));
-  const db = new Database(path.join(TMP, 'app.db'));
-  const row = db.prepare("SELECT id FROM messages WHERE status = 'pending' LIMIT 1").get();
-  db.prepare("UPDATE messages SET status = 'sending' WHERE id = ?").run(row.id);
-  db.close();
+  const row = (await testPool.query("SELECT id FROM messages WHERE status = 'pending' LIMIT 1")).rows[0];
+  await testPool.query("UPDATE messages SET status = 'sending' WHERE id = $1", [row.id]);
   children[1] = startServer();
   await waitHttp(`${BASE}/api/login`);
-  const db2 = new Database(path.join(TMP, 'app.db'), { readonly: true });
-  await until(() => db2.prepare('SELECT status FROM messages WHERE id = ?').get(row.id).status === 'pending', 'sending → pending');
-  db2.close();
+  await until(async () => (await testPool.query('SELECT status FROM messages WHERE id = $1', [row.id])).rows[0].status === 'pending', 'sending → pending');
   ok('при старте сервера «sending» возвращается в «pending»');
 }
 
@@ -511,6 +510,15 @@ async function uiTests() {
 }
 
 async function main() {
+  if (!process.env.TEST_DATABASE_URL) throw new Error('Укажите TEST_DATABASE_URL для отдельной тестовой PostgreSQL базы');
+  testSchema = `pulse_test_${Date.now()}`;
+  const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+  await admin.query(`CREATE SCHEMA ${testSchema}`);
+  await admin.end();
+  const url = new URL(process.env.TEST_DATABASE_URL);
+  url.searchParams.set('options', `-csearch_path=${testSchema}`);
+  process.env.DATABASE_URL = url.toString();
+  testPool = new Pool({ connectionString: process.env.DATABASE_URL });
   unitTests();
   run('test/mock-green.js', { MOCK_PORT: String(MOCK_PORT) });
   const startServer = () => run('src/server.js', {
@@ -529,8 +537,13 @@ async function main() {
 
 main()
   .catch((e) => { console.error('\n✗ ТЕСТ НЕ ПРОЙДЕН:', e.message, '\n', e.stack?.split('\n').slice(1, 4).join('\n')); process.exitCode = 1; })
-  .finally(() => {
+  .finally(async () => {
     children.forEach((c) => c.kill('SIGTERM'));
+    if (testPool) await testPool.end();
+    if (testSchema) {
+      const admin = new Pool({ connectionString: process.env.TEST_DATABASE_URL });
+      try { await admin.query(`DROP SCHEMA ${testSchema} CASCADE`); } finally { await admin.end(); }
+    }
     if (!process.env.KEEP_TMP) fs.rmSync(TMP, { recursive: true, force: true });
     setTimeout(() => process.exit(), 500);
   });

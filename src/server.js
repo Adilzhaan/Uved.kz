@@ -5,19 +5,19 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const multer = require('multer');
 
-const { db, MEDIA_DIR, logEvent, getSetting, setSetting } = require('./db');
+const { db, initDb, MEDIA_DIR, logEvent, getSetting, setSetting } = require('./db');
 const { client } = require('./greenapi');
 const { importFile, parseStandardFile } = require('./importer');
 const worker = require('./worker');
 const { handleWebhook, optOut } = require('./webhooks');
 const {
-  TZ, dayInTz, daysBetween, normalizePhone, renderTemplate, makeToken, checkToken, safeEqual, csvCell,
+  TZ, dayInTz, daysBetween, normalizePhone, renderTemplate, makeToken, checkToken, safeEqual, csvCell
 } = require('./util');
 
 const PORT = Number(process.env.PORT || 3000);
 const ADMIN_LOGIN = String(process.env.ADMIN_LOGIN || 'admin').trim();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
-const PUBLIC_URL = String(process.env.PUBLIC_URL || '').replace(/\/+$/, '');
+const PUBLIC_URL = String(process.env.PUBLIC_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : '')).replace(/\/+$/, '');
 const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 const SESSION_TTL = 30 * 24 * 3600 * 1000;
@@ -30,7 +30,7 @@ async function partnerCall(method, payload) {
   let r;
   try {
     r = await fetch(`${PARTNER_URL}/partner/${method}/${PARTNER_TOKEN}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(30000)
     });
   } catch {
     throw new HttpError(502, 'Не удалось связаться с GREEN-API. Попробуйте ещё раз через минуту.');
@@ -49,7 +49,7 @@ if (!PUBLIC_URL) console.warn('PUBLIC_URL не задан: вебхуки GREEN-
 if (PUBLIC_URL && !WEBHOOK_SECRET) console.warn('WEBHOOK_SECRET не задан: вебхуки приниматься не будут');
 
 class HttpError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
+  constructor(status, message) {super(message);this.status = status;}
 }
 const bad = (message) => new HttpError(400, message);
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -60,27 +60,42 @@ const int = (v, def, min, max) => {
 };
 
 const app = express();
+// Express 4 не перехватывает отклонённые Promise в async обработчиках.
+for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
+  const register = app[method].bind(app);
+  app[method] = (route, ...handlers) => register(route, ...handlers.map((fn) =>
+    fn.constructor.name === 'AsyncFunction' ? wrap(fn) : fn));
+}
 app.set('trust proxy', true);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '2mb' }));
 app.use(cookieParser());
 
-// ───────── Вебхук GREEN-API: без авторизации, всегда 200 ─────────
-app.post('/webhook/:secret', (req, res) => {
-  res.status(200).json({ ok: true });
-  if (!WEBHOOK_SECRET || !safeEqual(req.params.secret, WEBHOOK_SECRET)) return;
+app.get('/health', async (req, res) => {
   try {
-    handleWebhook(req.body);
+    await db.prepare('SELECT 1').get();
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
+});
+
+// ───────── Вебхук GREEN-API: без авторизации, всегда 200 ─────────
+app.post('/webhook/:secret', async (req, res) => {
+  if (!WEBHOOK_SECRET || !safeEqual(req.params.secret, WEBHOOK_SECRET)) return res.status(200).json({ ok: true });
+  try {
+    await handleWebhook(req.body);
   } catch (e) {
     console.error('webhook', e);
   }
+  res.status(200).json({ ok: true });
 });
 
 // ───────── Публичная раздача медиа ─────────
 app.use('/media', express.static(MEDIA_DIR, {
   index: false,
   maxAge: '7d',
-  setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff'),
+  setHeaders: (res) => res.setHeader('X-Content-Type-Options', 'nosniff')
 }));
 
 // ───────── Авторизация ─────────
@@ -100,7 +115,7 @@ app.post('/api/login', (req, res) => {
   }
   attempts.delete(ip);
   res.cookie('sid', makeToken(SESSION_SECRET, SESSION_TTL), {
-    httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: SESSION_TTL, path: '/',
+    httpOnly: true, sameSite: 'lax', secure: req.secure, maxAge: SESSION_TTL, path: '/'
   });
   res.json({ ok: true });
 });
@@ -119,32 +134,32 @@ app.get('/api/me', (req, res) => {
 });
 
 // ───────── Номера ─────────
-const getInstance = (id) => {
-  const inst = db.prepare('SELECT * FROM instances WHERE id = ?').get(Number(id));
+const getInstance = async (id) => {
+  const inst = await db.prepare('SELECT * FROM instances WHERE id = ?').get(Number(id));
   if (!inst) throw new HttpError(404, 'Номер не найден');
   return inst;
 };
-function instanceView(inst, today = dayInTz()) {
+async function instanceView(inst, today = dayInTz()) {
   const { api_token, ...rest } = inst;
   return {
     ...rest,
     token_tail: api_token.slice(-4),
-    sent_today: worker.sentToday(inst.id, today),
-    limit_today: worker.dailyLimit(inst, today),
+    sent_today: await worker.sentToday(inst.id, today),
+    limit_today: worker.dailyLimit(inst, today)
   };
 }
 const webhookUrl = () => `${PUBLIC_URL}/webhook/${WEBHOOK_SECRET}`;
 async function installWebhook(inst) {
   if (!PUBLIC_URL || !WEBHOOK_SECRET) throw bad('Задайте PUBLIC_URL и WEBHOOK_SECRET в .env — без них вебхуки не работают');
   await client(inst).setSettings({
-    webhookUrl: webhookUrl(), outgoingWebhook: 'yes', stateWebhook: 'yes', incomingWebhook: 'yes',
+    webhookUrl: webhookUrl(), outgoingWebhook: 'yes', stateWebhook: 'yes', incomingWebhook: 'yes'
   });
 }
 const greenError = (e) => new HttpError(e.status === 401 || e.status === 403 ? 400 : 502, `GREEN-API: ${e.message}`);
 
-app.get('/api/instances', (req, res) => {
+app.get('/api/instances', async (req, res) => {
   const today = dayInTz();
-  res.json(db.prepare('SELECT * FROM instances ORDER BY id').all().map((i) => instanceView(i, today)));
+  res.json(await Promise.all((await db.prepare('SELECT * FROM instances ORDER BY id').all()).map((i) => instanceView(i, today))));
 });
 
 app.post('/api/instances', wrap(async (req, res) => {
@@ -153,13 +168,13 @@ app.post('/api/instances', wrap(async (req, res) => {
     name: String(b.name || '').trim().slice(0, 80),
     id_instance: String(b.id_instance || '').trim(),
     api_token: String(b.api_token || '').trim(),
-    api_url: String(b.api_url || '').trim().replace(/\/+$/, '') || DEFAULT_API_URL,
+    api_url: String(b.api_url || '').trim().replace(/\/+$/, '') || DEFAULT_API_URL
   };
   if (!/^\d{4,20}$/.test(inst.id_instance)) throw bad('idInstance должен состоять из цифр');
   if (!/^[A-Za-z0-9]{6,200}$/.test(inst.api_token)) throw bad('Укажите apiTokenInstance');
   if (!/^https?:\/\/[^\s/]+/.test(inst.api_url)) throw bad('apiUrl должен начинаться с http(s)://');
   if (!inst.name) inst.name = `Номер ${inst.id_instance}`;
-  if (db.prepare('SELECT 1 FROM instances WHERE id_instance = ?').get(inst.id_instance)) throw bad('Этот инстанс уже добавлен');
+  if (await db.prepare('SELECT 1 FROM instances WHERE id_instance = ?').get(inst.id_instance)) throw bad('Этот инстанс уже добавлен');
 
   let state;
   try {
@@ -169,22 +184,22 @@ app.post('/api/instances', wrap(async (req, res) => {
   }
   let webhook = 'skipped';
   if (PUBLIC_URL && WEBHOOK_SECRET) {
-    try { await installWebhook(inst); webhook = 'ok'; } catch (e) { webhook = e.message; }
+    try {await installWebhook(inst);webhook = 'ok';} catch (e) {webhook = e.message;}
   }
-  const id = db.prepare(`INSERT INTO instances(name, id_instance, api_token, api_url, state, created_at)
-    VALUES (@name, @id_instance, @api_token, @api_url, @state, @created_at)`)
-    .run({ ...inst, state, created_at: Date.now() }).lastInsertRowid;
-  logEvent(`Добавлен номер «${inst.name}» (инстанс ${inst.id_instance}), состояние: ${state}`, 'info', Number(id));
-  const saved = getInstance(id);
+  const id = (await db.prepare(`INSERT INTO instances(name, id_instance, api_token, api_url, state, created_at)
+    VALUES (@name, @id_instance, @api_token, @api_url, @state, @created_at)`).
+  run({ ...inst, state, created_at: Date.now() })).lastInsertRowid;
+  await logEvent(`Добавлен номер «${inst.name}» (инстанс ${inst.id_instance}), состояние: ${state}`, 'info', Number(id));
+  const saved = await getInstance(id);
   if (state === 'authorized') await worker.refreshInstance(saved).catch(() => {});
-  res.json({ ...instanceView(getInstance(id)), webhook });
+  res.json({ ...(await instanceView(await getInstance(id))), webhook });
 }));
 
 // «Подключить номер» одной кнопкой: берём свободное подключение, а если их нет — создаём новое
 app.post('/api/numbers/connect', wrap(async (req, res) => {
-  const free = db.prepare("SELECT * FROM instances WHERE state <> 'authorized' AND state NOT IN ('blocked', 'yellowCard') ORDER BY id LIMIT 1").get();
-  if (free) return res.json({ ...instanceView(free), created: false });
-  const total = db.prepare('SELECT COUNT(*) n FROM instances').get().n;
+  const free = await db.prepare("SELECT * FROM instances WHERE state <> 'authorized' AND state NOT IN ('blocked', 'yellowCard') ORDER BY id LIMIT 1").get();
+  if (free) return res.json({ ...(await instanceView(free)), created: false });
+  const total = (await db.prepare('SELECT COUNT(*) n FROM instances').get()).n;
   // «мест нет» — штатная ситуация, а не ошибка: отвечаем 200 с понятным текстом
   if (!PARTNER_TOKEN) return res.json({ full: true, message: 'Свободных подключений нет. Попросите администратора добавить ещё одно.' });
   if (total >= MAX_NUMBERS) return res.json({ full: true, message: `Подключено максимальное число номеров (${MAX_NUMBERS}). Чтобы добавить ещё, обратитесь к администратору.` });
@@ -193,90 +208,90 @@ app.post('/api/numbers/connect', wrap(async (req, res) => {
   if (PUBLIC_URL && WEBHOOK_SECRET) Object.assign(settings, { webhookUrl: webhookUrl(), outgoingWebhook: 'yes', stateWebhook: 'yes', incomingWebhook: 'yes' });
   const created = await partnerCall('createInstance', settings);
   if (!created?.idInstance || !created?.apiTokenInstance) throw new HttpError(502, 'GREEN-API не создал подключение. Обратитесь к администратору.');
-  const id = db.prepare(`INSERT INTO instances(name, id_instance, api_token, api_url, state, managed, created_at)
-    VALUES (?, ?, ?, ?, 'starting', 1, ?)`).run(name, String(created.idInstance), String(created.apiTokenInstance), PARTNER_URL, Date.now()).lastInsertRowid;
-  logEvent(`Создано подключение «${name}» (инстанс ${created.idInstance}) через партнёрский API`, 'info', Number(id));
-  res.json({ ...instanceView(getInstance(id)), created: true });
+  const id = (await db.prepare(`INSERT INTO instances(name, id_instance, api_token, api_url, state, managed, created_at)
+    VALUES (?, ?, ?, ?, 'starting', 1, ?)`).run(name, String(created.idInstance), String(created.apiTokenInstance), PARTNER_URL, Date.now())).lastInsertRowid;
+  await logEvent(`Создано подключение «${name}» (инстанс ${created.idInstance}) через партнёрский API`, 'info', Number(id));
+  res.json({ ...(await instanceView(await getInstance(id))), created: true });
 }));
 
-app.patch('/api/instances/:id', (req, res) => {
-  const inst = getInstance(req.params.id);
+app.patch('/api/instances/:id', async (req, res) => {
+  const inst = await getInstance(req.params.id);
   const b = req.body || {};
   const next = {
     name: b.name !== undefined ? String(b.name).trim().slice(0, 80) || inst.name : inst.name,
     daily_limit_start: b.daily_limit_start !== undefined ? int(b.daily_limit_start, inst.daily_limit_start, 1, 5000) : inst.daily_limit_start,
     daily_limit_max: b.daily_limit_max !== undefined ? int(b.daily_limit_max, inst.daily_limit_max, 1, 5000) : inst.daily_limit_max,
-    warmup_step: b.warmup_step !== undefined ? int(b.warmup_step, inst.warmup_step, 0, 1000) : inst.warmup_step,
+    warmup_step: b.warmup_step !== undefined ? int(b.warmup_step, inst.warmup_step, 0, 1000) : inst.warmup_step
   };
   if (next.daily_limit_max < next.daily_limit_start) next.daily_limit_max = next.daily_limit_start;
-  db.prepare('UPDATE instances SET name = ?, daily_limit_start = ?, daily_limit_max = ?, warmup_step = ? WHERE id = ?')
-    .run(next.name, next.daily_limit_start, next.daily_limit_max, next.warmup_step, inst.id);
+  await db.prepare('UPDATE instances SET name = ?, daily_limit_start = ?, daily_limit_max = ?, warmup_step = ? WHERE id = ?').
+  run(next.name, next.daily_limit_start, next.daily_limit_max, next.warmup_step, inst.id);
   if (b.enabled !== undefined) {
     const on = b.enabled ? 1 : 0;
-    db.prepare('UPDATE instances SET enabled = ?, disabled_reason = ? WHERE id = ?').run(on, on ? null : 'Выключен вручную', inst.id);
+    await db.prepare('UPDATE instances SET enabled = ?, disabled_reason = ? WHERE id = ?').run(on, on ? null : 'Выключен вручную', inst.id);
     worker.resetInstance(inst.id);
-    if (on !== inst.enabled) logEvent(`Номер «${next.name}» ${on ? 'включён' : 'выключен'} вручную`, 'info', inst.id);
+    if (on !== inst.enabled) await logEvent(`Номер «${next.name}» ${on ? 'включён' : 'выключен'} вручную`, 'info', inst.id);
   }
-  res.json(instanceView(getInstance(inst.id)));
+  res.json(await instanceView(await getInstance(inst.id)));
 });
 
 app.post('/api/instances/:id/refresh', wrap(async (req, res) => {
-  const inst = getInstance(req.params.id);
-  try { await worker.refreshInstance(inst); } catch (e) { throw greenError(e); }
-  res.json(instanceView(getInstance(inst.id)));
+  const inst = await getInstance(req.params.id);
+  try {await worker.refreshInstance(inst);} catch (e) {throw greenError(e);}
+  res.json(await instanceView(await getInstance(inst.id)));
 }));
 
 app.get('/api/instances/:id/qr', wrap(async (req, res) => {
-  const inst = getInstance(req.params.id);
+  const inst = await getInstance(req.params.id);
   let r;
-  try { r = await client(inst).qr(); } catch (e) { throw greenError(e); }
+  try {r = await client(inst).qr();} catch (e) {throw greenError(e);}
   if (r?.type === 'alreadyLogged') await worker.refreshInstance(inst).catch(() => {});
   res.json({ type: r?.type || 'error', message: r?.message || '' });
 }));
 
 app.post('/api/instances/:id/logout', wrap(async (req, res) => {
-  const inst = getInstance(req.params.id);
-  try { await client(inst).logout(); } catch (e) { throw greenError(e); }
-  worker.applyState(inst.id, 'notAuthorized', null);
-  logEvent(`Номер «${inst.name}» отвязан (logout)`, 'warn', inst.id);
-  res.json(instanceView(getInstance(inst.id)));
+  const inst = await getInstance(req.params.id);
+  try {await client(inst).logout();} catch (e) {throw greenError(e);}
+  await worker.applyState(inst.id, 'notAuthorized', null);
+  await logEvent(`Номер «${inst.name}» отвязан (logout)`, 'warn', inst.id);
+  res.json(await instanceView(await getInstance(inst.id)));
 }));
 
 app.post('/api/instances/:id/webhook', wrap(async (req, res) => {
-  const inst = getInstance(req.params.id);
-  try { await installWebhook(inst); } catch (e) { throw e instanceof HttpError ? e : greenError(e); }
-  logEvent(`Номер «${inst.name}»: webhook переустановлен`, 'info', inst.id);
+  const inst = await getInstance(req.params.id);
+  try {await installWebhook(inst);} catch (e) {throw e instanceof HttpError ? e : greenError(e);}
+  await logEvent(`Номер «${inst.name}»: webhook переустановлен`, 'info', inst.id);
   res.json({ ok: true, url: `${PUBLIC_URL}/webhook/…` });
 }));
 
 app.post('/api/instances/:id/test', wrap(async (req, res) => {
-  const inst = getInstance(req.params.id);
+  const inst = await getInstance(req.params.id);
   const phone = normalizePhone(req.body?.phone);
   const text = String(req.body?.text || '').trim();
   if (inst.state !== 'authorized' || !inst.enabled) throw bad('Этот номер WhatsApp сейчас не подключён');
   if (!phone) throw bad('Некорректный номер телефона');
   if (!text) throw bad('Введите текст сообщения');
   if (text.length > 4000) throw bad('Сообщение не должно быть длиннее 4000 символов');
-  if (db.prepare('SELECT 1 FROM contacts WHERE phone = ? AND opted_out = 1').get(phone))
-    throw bad('Получатель отписался от сообщений');
+  if (await db.prepare('SELECT 1 FROM contacts WHERE phone = ? AND opted_out = 1').get(phone))
+  throw bad('Получатель отписался от сообщений');
   let r;
-  try { r = await client(inst).sendMessage(phone, text); } catch (e) { throw greenError(e); }
-  logEvent(`Тестовая отправка с «${inst.name}» на ${phone}`, 'info', inst.id);
+  try {r = await client(inst).sendMessage(phone, text);} catch (e) {throw greenError(e);}
+  await logEvent(`Тестовая отправка с «${inst.name}» на ${phone}`, 'info', inst.id);
   res.json({ ok: true, idMessage: r?.idMessage });
 }));
 
 app.delete('/api/instances/:id', wrap(async (req, res) => {
-  const inst = getInstance(req.params.id);
+  const inst = await getInstance(req.params.id);
   let warning = null;
   if (inst.managed && PARTNER_TOKEN) {
     // подключение создавали мы — удаляем его и в GREEN-API, чтобы за него не списывалась оплата
-    try { await partnerCall('deleteInstanceAccount', { idInstance: Number(inst.id_instance) }); } catch (e) { warning = e.message; }
+    try {await partnerCall('deleteInstanceAccount', { idInstance: Number(inst.id_instance) });} catch (e) {warning = e.message;}
   }
-  db.transaction(() => {
-    db.prepare('DELETE FROM instances WHERE id = ?').run(inst.id);
-    db.prepare('DELETE FROM daily_counts WHERE instance_id = ?').run(inst.id);
+  await db.transaction(async () => {
+    await db.prepare('DELETE FROM instances WHERE id = ?').run(inst.id);
+    await db.prepare('DELETE FROM daily_counts WHERE instance_id = ?').run(inst.id);
   })();
-  logEvent(`Номер «${inst.name}» удалён${warning ? ` (в GREEN-API удалить не удалось: ${warning})` : ''}`, 'warn');
+  await logEvent(`Номер «${inst.name}» удалён${warning ? ` (в GREEN-API удалить не удалось: ${warning})` : ''}`, 'warn');
   res.json({ ok: true, warning });
 }));
 
@@ -285,10 +300,10 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100
 const fixName = (s) => Buffer.from(String(s || ''), 'latin1').toString('utf8'); // multer отдаёт имя в latin1
 const fileHash = (buffer) => crypto.createHash('sha256').update(buffer).digest('hex');
 
-app.post('/api/import-standard/preview', upload.single('file'), (req, res) => {
+app.post('/api/import-standard/preview', upload.single('file'), async (req, res) => {
   if (!req.file) throw bad('Выберите файл Excel .xlsx');
   const parsed = parseStandardFile(req.file.buffer, fixName(req.file.originalname));
-  const optedOut = new Set(db.prepare('SELECT phone FROM contacts WHERE opted_out = 1').all().map((r) => r.phone));
+  const optedOut = new Set((await db.prepare('SELECT phone FROM contacts WHERE opted_out = 1').all()).map((r) => r.phone));
   const recipients = parsed.contacts.filter((c) => !optedOut.has(c.phone));
   res.json({
     hash: fileHash(req.file.buffer),
@@ -301,11 +316,11 @@ app.post('/api/import-standard/preview', upload.single('file'), (req, res) => {
     recipients: recipients.length,
     phone_column: 'Телефон (колонка A)',
     sample: recipients.slice(0, 10).map((c) => ({ phone: c.phone, name: c.name })),
-    can_import: recipients.length > 0 && parsed.invalid === 0,
+    can_import: recipients.length > 0 && parsed.invalid === 0
   });
 });
 
-app.post('/api/import-standard', upload.single('file'), (req, res) => {
+app.post('/api/import-standard', upload.single('file'), async (req, res) => {
   if (!req.file) throw bad('Выберите файл Excel .xlsx');
   const filename = fixName(req.file.originalname);
   const parsed = parseStandardFile(req.file.buffer, filename);
@@ -313,25 +328,25 @@ app.post('/api/import-standard', upload.single('file'), (req, res) => {
   if (!parsed.contacts.length) throw bad('Добавьте хотя бы один номер в шаблон');
   if (String(req.body?.hash || '') !== fileHash(req.file.buffer)) throw bad('Файл изменился после проверки. Проверьте его ещё раз');
   const listName = String(req.body?.name || '').trim().slice(0, 120) || filename.replace(/\.xlsx$/i, '');
-  const result = importFile(req.file.buffer, filename, listName, parseStandardFile);
-  logEvent(`Импорт «${listName}» по шаблону: получателей ${result.valid - result.opted_out}, дублей ${result.duplicates}`);
+  const result = await importFile(req.file.buffer, filename, listName, parseStandardFile);
+  await logEvent(`Импорт «${listName}» по шаблону: получателей ${result.valid - result.opted_out}, дублей ${result.duplicates}`);
   res.json(result);
 });
 
-app.get('/api/lists', (req, res) => {
-  res.json(db.prepare(`SELECT l.*, (SELECT COUNT(*) FROM list_contacts lc WHERE lc.list_id = l.id) AS contacts
+app.get('/api/lists', async (req, res) => {
+  res.json(await db.prepare(`SELECT l.*, (SELECT COUNT(*) FROM list_contacts lc WHERE lc.list_id = l.id) AS contacts
     FROM lists l ORDER BY l.id DESC`).all());
 });
 
-app.get('/api/lists/:id/recipients.csv', (req, res) => {
-  const list = db.prepare('SELECT id FROM lists WHERE id = ?').get(Number(req.params.id));
+app.get('/api/lists/:id/recipients.csv', async (req, res) => {
+  const list = await db.prepare('SELECT id FROM lists WHERE id = ?').get(Number(req.params.id));
   if (!list) throw new HttpError(404, 'База не найдена');
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.attachment('recipients.csv');
   res.write('\uFEFF' + ['Телефон', 'Имя', 'Город'].map(csvCell).join(';') + '\r\n');
-  const rows = db.prepare(`SELECT c.phone, c.name, c.vars FROM list_contacts lc
+  const rows = await db.prepare(`SELECT c.phone, c.name, c.vars FROM list_contacts lc
     JOIN contacts c ON c.id = lc.contact_id
-    WHERE lc.list_id = ? AND c.opted_out = 0 ORDER BY lc.contact_id`).iterate(list.id);
+    WHERE lc.list_id = ? AND c.opted_out = 0 ORDER BY lc.contact_id`).all(list.id);
   for (const row of rows) {
     const vars = JSON.parse(row.vars || '{}');
     res.write([`+${row.phone}`, row.name, vars['город'] || ''].map(csvCell).join(';') + '\r\n');
@@ -339,14 +354,14 @@ app.get('/api/lists/:id/recipients.csv', (req, res) => {
   res.end();
 });
 
-app.post('/api/import', upload.single('file'), (req, res) => {
+app.post('/api/import', upload.single('file'), async (req, res) => {
   if (!req.file) throw bad('Файл не получен');
   const filename = fixName(req.file.originalname);
   if (!/\.(xlsx|xls|csv|txt)$/i.test(filename)) throw bad('Поддерживаются файлы XLSX и CSV');
   const listName = String(req.body?.name || '').trim().slice(0, 120) || filename.replace(/\.[^.]+$/, '');
-  const result = importFile(req.file.buffer, filename, listName);
-  logEvent(`Импорт «${listName}»: строк ${result.rows}, новых ${result.new}, уже было ${result.existing}, ` +
-    `дублей ${result.duplicates}, невалидных ${result.invalid} (${result.ms} мс)`);
+  const result = await importFile(req.file.buffer, filename, listName);
+  await logEvent(`Импорт «${listName}»: строк ${result.rows}, новых ${result.new}, уже было ${result.existing}, ` +
+  `дублей ${result.duplicates}, невалидных ${result.invalid} (${result.ms} мс)`);
   res.json(result);
 });
 
@@ -372,12 +387,12 @@ app.post('/api/import-url', wrap(async (req, res) => {
   if (buffer.length > 100 * 1024 * 1024) throw bad('Таблица слишком большая');
   const cd = r.headers.get('content-disposition') || '';
   let title = '';
-  try { title = decodeURIComponent((cd.match(/filename\*=UTF-8''([^;]+)/i) || [])[1] || ''); } catch { /* пусто */ }
+  try {title = decodeURIComponent((cd.match(/filename\*=UTF-8''([^;]+)/i) || [])[1] || '');} catch {/* пусто */}
   title = title.replace(/\.csv$/i, '');
   const listName = String(req.body?.name || '').trim().slice(0, 120) || title.slice(0, 120) || `Google Таблица ${new Date().toLocaleDateString('ru-RU', { timeZone: TZ })}`;
-  const result = importFile(buffer, 'sheet.csv', listName);
-  logEvent(`Импорт из Google Таблицы «${listName}»: строк ${result.rows}, новых ${result.new}, уже было ${result.existing}, ` +
-    `дублей ${result.duplicates}, невалидных ${result.invalid}`);
+  const result = await importFile(buffer, 'sheet.csv', listName);
+  await logEvent(`Импорт из Google Таблицы «${listName}»: строк ${result.rows}, новых ${result.new}, уже было ${result.existing}, ` +
+  `дублей ${result.duplicates}, невалидных ${result.invalid}`);
   res.json(result);
 }));
 
@@ -389,57 +404,57 @@ const templateInput = (b) => {
   if (!text.trim()) throw bad('Введите текст шаблона');
   return { name, text };
 };
-app.get('/api/templates', (req, res) => res.json(db.prepare('SELECT * FROM templates ORDER BY id DESC').all()));
-app.post('/api/templates', (req, res) => {
+app.get('/api/templates', async (req, res) => res.json(await db.prepare('SELECT * FROM templates ORDER BY id DESC').all()));
+app.post('/api/templates', async (req, res) => {
   const t = templateInput(req.body);
-  const id = db.prepare('INSERT INTO templates(name, text, created_at) VALUES (?, ?, ?)').run(t.name, t.text, Date.now()).lastInsertRowid;
-  res.json(db.prepare('SELECT * FROM templates WHERE id = ?').get(id));
+  const id = (await db.prepare('INSERT INTO templates(name, text, created_at) VALUES (?, ?, ?)').run(t.name, t.text, Date.now())).lastInsertRowid;
+  res.json(await db.prepare('SELECT * FROM templates WHERE id = ?').get(id));
 });
-app.put('/api/templates/:id', (req, res) => {
+app.put('/api/templates/:id', async (req, res) => {
   const t = templateInput(req.body);
-  const r = db.prepare('UPDATE templates SET name = ?, text = ? WHERE id = ?').run(t.name, t.text, Number(req.params.id));
+  const r = await db.prepare('UPDATE templates SET name = ?, text = ? WHERE id = ?').run(t.name, t.text, Number(req.params.id));
   if (!r.changes) throw new HttpError(404, 'Шаблон не найден');
-  res.json(db.prepare('SELECT * FROM templates WHERE id = ?').get(Number(req.params.id)));
+  res.json(await db.prepare('SELECT * FROM templates WHERE id = ?').get(Number(req.params.id)));
 });
-app.delete('/api/templates/:id', (req, res) => {
-  db.prepare('DELETE FROM templates WHERE id = ?').run(Number(req.params.id));
+app.delete('/api/templates/:id', async (req, res) => {
+  await db.prepare('DELETE FROM templates WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
 });
 
-app.delete('/api/lists/:id', (req, res) => {
+app.delete('/api/lists/:id', async (req, res) => {
   const id = Number(req.params.id);
-  const list = db.prepare('SELECT * FROM lists WHERE id = ?').get(id);
+  const list = await db.prepare('SELECT * FROM lists WHERE id = ?').get(id);
   if (!list) throw new HttpError(404, 'База не найдена');
-  const used = db.prepare("SELECT name FROM campaigns WHERE list_id = ? AND status IN ('draft', 'running', 'paused') LIMIT 1").get(id);
+  const used = await db.prepare("SELECT name FROM campaigns WHERE list_id = ? AND status IN ('draft', 'running', 'paused') LIMIT 1").get(id);
   if (used) throw bad(`База используется в кампании «${used.name}». Сначала завершите или удалите кампанию.`);
-  const removed = db.transaction(() => {
+  const removed = await db.transaction(async () => {
     // контакты, которые были только в этой базе, без истории и не в стоп-листе, удаляем вместе с ней
-    const r = db.prepare(`DELETE FROM contacts WHERE opted_out = 0
+    const r = await db.prepare(`DELETE FROM contacts WHERE opted_out = 0
       AND id IN (SELECT contact_id FROM list_contacts WHERE list_id = @id)
       AND NOT EXISTS (SELECT 1 FROM list_contacts o WHERE o.contact_id = contacts.id AND o.list_id <> @id)
       AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.contact_id = contacts.id)`).run({ id });
-    db.prepare('DELETE FROM list_contacts WHERE list_id = ?').run(id);
-    db.prepare('DELETE FROM lists WHERE id = ?').run(id);
+    await db.prepare('DELETE FROM list_contacts WHERE list_id = ?').run(id);
+    await db.prepare('DELETE FROM lists WHERE id = ?').run(id);
     return r.changes;
   })();
-  logEvent(`База «${list.name}» удалена, контактов удалено: ${removed}`, 'warn');
+  await logEvent(`База «${list.name}» удалена, контактов удалено: ${removed}`, 'warn');
   res.json({ ok: true, removed });
 });
 
 // ───────── Кампании ─────────
-const getCampaign = (id) => {
-  const c = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(Number(id));
+const getCampaign = async (id) => {
+  const c = await db.prepare('SELECT * FROM campaigns WHERE id = ?').get(Number(id));
   if (!c) throw new HttpError(404, 'Кампания не найдена');
   return c;
 };
-const parseIds = (json) => { try { return JSON.parse(json) || []; } catch { return []; } };
+const parseIds = (json) => {try {return JSON.parse(json) || [];} catch {return [];}};
 
-function campaignStats(c, instances, today) {
-  const rows = db.prepare('SELECT status, COUNT(*) n, SUM(replied) r FROM messages WHERE campaign_id = ? GROUP BY status').all(c.id);
+async function campaignStats(c, instances, today) {
+  const rows = await db.prepare('SELECT status, COUNT(*) n, SUM(replied) r FROM messages WHERE campaign_id = ? GROUP BY status').all(c.id);
   const by = {};
   let total = 0;
   let replied = 0;
-  for (const r of rows) { by[r.status] = r.n; total += r.n; replied += r.r || 0; }
+  for (const r of rows) {by[r.status] = r.n;total += r.n;replied += r.r || 0;}
   const g = (k) => by[k] || 0;
   const queue = g('pending') + g('sending');
   // ETA: день за днём с учётом прогрева, окна отправки и средней паузы
@@ -448,7 +463,7 @@ function campaignStats(c, instances, today) {
   let eta = null;
   if (queue > 0 && mine.length) {
     const avgDelay = Math.max(1, (Math.max(c.delay_min, worker.MIN_DELAY_SEC) + Math.max(c.delay_max, c.delay_min, worker.MIN_DELAY_SEC)) / 2);
-    const windowCap = Math.max(1, Math.floor(((c.hour_to - c.hour_from) * 3600) / avgDelay));
+    const windowCap = Math.max(1, Math.floor((c.hour_to - c.hour_from) * 3600 / avgDelay));
     let left = queue;
     eta = 0;
     while (left > 0 && eta < 3650) {
@@ -457,7 +472,7 @@ function campaignStats(c, instances, today) {
         const days = (i.first_send_day ? Math.max(0, daysBetween(i.first_send_day, today)) : 0) + eta;
         cap += Math.min(windowCap, i.daily_limit_max, i.daily_limit_start + i.warmup_step * days);
       }
-      if (cap <= 0) { eta = null; break; }
+      if (cap <= 0) {eta = null;break;}
       left -= cap;
       eta++;
     }
@@ -473,26 +488,26 @@ function campaignStats(c, instances, today) {
     skipped: g('skipped'),
     queue,
     eta_days: eta,
-    daily_capacity: mine.reduce((n, i) => n + worker.dailyLimit(i, today), 0),
+    daily_capacity: mine.reduce((n, i) => n + worker.dailyLimit(i, today), 0)
   };
 }
-function campaignView(c, instances, today) {
-  return { ...c, instance_ids: parseIds(c.instance_ids), stats: campaignStats(c, instances, today) };
+async function campaignView(c, instances, today) {
+  return { ...c, instance_ids: parseIds(c.instance_ids), stats: await campaignStats(c, instances, today) };
 }
-function campaignInput(b, prev) {
+async function campaignInput(b, prev) {
   const minDelay = worker.MIN_DELAY_SEC;
   const out = {
     name: String(b.name ?? prev?.name ?? '').trim().slice(0, 120),
     text: String(b.text ?? prev?.text ?? '').slice(0, 4000),
     media_url: b.media_url !== undefined ? String(b.media_url || '').trim() || null : prev?.media_url ?? null,
     media_name: b.media_name !== undefined ? String(b.media_name || '').trim().slice(0, 200) || null : prev?.media_name ?? null,
-    list_id: b.list_id !== undefined ? (b.list_id === null || b.list_id === '' ? null : Number(b.list_id)) : prev?.list_id ?? null,
+    list_id: b.list_id !== undefined ? b.list_id === null || b.list_id === '' ? null : Number(b.list_id) : prev?.list_id ?? null,
     instance_ids: b.instance_ids !== undefined ? b.instance_ids : parseIds(prev?.instance_ids || '[]'),
     delay_min: int(b.delay_min ?? prev?.delay_min, 25, minDelay, 3600),
     delay_max: int(b.delay_max ?? prev?.delay_max, 70, minDelay, 7200),
     hour_from: int(b.hour_from ?? prev?.hour_from, 10, 0, 23),
     hour_to: int(b.hour_to ?? prev?.hour_to, 20, 1, 24),
-    check_wa: (b.check_wa !== undefined ? b.check_wa : prev?.check_wa) ? 1 : 0,
+    check_wa: (b.check_wa !== undefined ? b.check_wa : prev?.check_wa) ? 1 : 0
   };
   if (!out.name) throw bad('Укажите название кампании');
   if (!out.text.trim() && !out.media_url) throw bad('Добавьте текст сообщения или файл');
@@ -500,133 +515,133 @@ function campaignInput(b, prev) {
   if (!out.media_url) out.media_name = null;
   if (out.delay_max < out.delay_min) out.delay_max = out.delay_min;
   if (out.hour_to <= out.hour_from) throw bad('Окно отправки: час «до» должен быть больше часа «с»');
-  if (out.list_id !== null && !db.prepare('SELECT 1 FROM lists WHERE id = ?').get(out.list_id)) throw bad('База не найдена');
+  if (out.list_id !== null && !(await db.prepare('SELECT 1 FROM lists WHERE id = ?').get(out.list_id))) throw bad('База не найдена');
   if (!Array.isArray(out.instance_ids)) throw bad('Некорректный список номеров');
-  const known = new Set(db.prepare('SELECT id FROM instances').all().map((i) => i.id));
+  const known = new Set((await db.prepare('SELECT id FROM instances').all()).map((i) => i.id));
   out.instance_ids = [...new Set(out.instance_ids.map(Number))].filter((id) => known.has(id));
   if (!out.instance_ids.length) throw bad('Выберите хотя бы один номер для отправки');
   out.instance_ids = JSON.stringify(out.instance_ids);
   return out;
 }
 
-app.get('/api/campaigns', (req, res) => {
-  const instances = db.prepare('SELECT * FROM instances').all();
+app.get('/api/campaigns', async (req, res) => {
+  const instances = await db.prepare('SELECT * FROM instances').all();
   const today = dayInTz();
-  res.json(db.prepare('SELECT * FROM campaigns ORDER BY id DESC').all().map((c) => campaignView(c, instances, today)));
+  res.json(await Promise.all((await db.prepare('SELECT * FROM campaigns ORDER BY id DESC').all()).map((c) => campaignView(c, instances, today))));
 });
-const sendCampaign = (res, id) => res.json(campaignView(getCampaign(id), db.prepare('SELECT * FROM instances').all(), dayInTz()));
-app.get('/api/campaigns/:id', (req, res) => sendCampaign(res, req.params.id));
+const sendCampaign = async (res, id) => res.json(await campaignView(await getCampaign(id), await db.prepare('SELECT * FROM instances').all(), dayInTz()));
+app.get('/api/campaigns/:id', async (req, res) => await sendCampaign(res, req.params.id));
 
-app.post('/api/campaigns', (req, res) => {
-  const c = campaignInput(req.body || {}, null);
-  const id = db.prepare(`INSERT INTO campaigns(name, text, media_url, media_name, list_id, instance_ids, delay_min, delay_max, hour_from, hour_to, check_wa, created_at)
-    VALUES (@name, @text, @media_url, @media_name, @list_id, @instance_ids, @delay_min, @delay_max, @hour_from, @hour_to, @check_wa, @created_at)`)
-    .run({ ...c, created_at: Date.now() }).lastInsertRowid;
-  sendCampaign(res, id);
+app.post('/api/campaigns', async (req, res) => {
+  const c = await campaignInput(req.body || {}, null);
+  const id = (await db.prepare(`INSERT INTO campaigns(name, text, media_url, media_name, list_id, instance_ids, delay_min, delay_max, hour_from, hour_to, check_wa, created_at)
+    VALUES (@name, @text, @media_url, @media_name, @list_id, @instance_ids, @delay_min, @delay_max, @hour_from, @hour_to, @check_wa, @created_at)`).
+  run({ ...c, created_at: Date.now() })).lastInsertRowid;
+  await sendCampaign(res, id);
 });
 
-app.put('/api/campaigns/:id', (req, res) => {
-  const prev = getCampaign(req.params.id);
+app.put('/api/campaigns/:id', async (req, res) => {
+  const prev = await getCampaign(req.params.id);
   if (prev.status === 'running') throw bad('Сначала поставьте кампанию на паузу');
   const b = { ...(req.body || {}) };
   if (prev.status !== 'draft') delete b.list_id; // базу можно менять только в черновике
-  const c = campaignInput(b, prev);
-  db.prepare(`UPDATE campaigns SET name=@name, text=@text, media_url=@media_url, media_name=@media_name, list_id=@list_id,
+  const c = await campaignInput(b, prev);
+  await db.prepare(`UPDATE campaigns SET name=@name, text=@text, media_url=@media_url, media_name=@media_name, list_id=@list_id,
     instance_ids=@instance_ids, delay_min=@delay_min, delay_max=@delay_max, hour_from=@hour_from, hour_to=@hour_to, check_wa=@check_wa
     WHERE id=@id`).run({ ...c, id: prev.id });
-  sendCampaign(res, prev.id);
+  await sendCampaign(res, prev.id);
 });
 
-app.delete('/api/campaigns/:id', (req, res) => {
-  const c = getCampaign(req.params.id);
+app.delete('/api/campaigns/:id', async (req, res) => {
+  const c = await getCampaign(req.params.id);
   if (c.status === 'running') throw bad('Сначала остановите кампанию');
-  db.transaction(() => {
-    db.prepare('DELETE FROM messages WHERE campaign_id = ?').run(c.id);
-    db.prepare('DELETE FROM campaigns WHERE id = ?').run(c.id);
+  await db.transaction(async () => {
+    await db.prepare('DELETE FROM messages WHERE campaign_id = ?').run(c.id);
+    await db.prepare('DELETE FROM campaigns WHERE id = ?').run(c.id);
   })();
-  logEvent(`Кампания «${c.name}» удалена`, 'warn');
+  await logEvent(`Кампания «${c.name}» удалена`, 'warn');
   res.json({ ok: true });
 });
 
 // Превью текста на 3 случайных контактах
-app.post('/api/preview', (req, res) => {
+app.post('/api/preview', async (req, res) => {
   const text = String(req.body?.text || '');
   const listId = req.body?.list_id ? Number(req.body.list_id) : null;
-  const rows = listId
-    ? db.prepare(`SELECT c.* FROM contacts c JOIN list_contacts lc ON lc.contact_id = c.id
-        WHERE lc.list_id = ? AND c.opted_out = 0 ORDER BY RANDOM() LIMIT 3`).all(listId)
-    : db.prepare('SELECT * FROM contacts WHERE opted_out = 0 ORDER BY RANDOM() LIMIT 3').all();
+  const rows = listId ? await
+  db.prepare(`SELECT c.* FROM contacts c JOIN list_contacts lc ON lc.contact_id = c.id
+        WHERE lc.list_id = ? AND c.opted_out = 0 ORDER BY RANDOM() LIMIT 3`).all(listId) : await
+  db.prepare('SELECT * FROM contacts WHERE opted_out = 0 ORDER BY RANDOM() LIMIT 3').all();
   res.json(rows.map((c) => {
     let vars = {};
-    try { vars = JSON.parse(c.vars); } catch { /* пусто */ }
+    try {vars = JSON.parse(c.vars);} catch {/* пусто */}
     return { phone: c.phone, name: c.name, text: renderTemplate(text, { ...vars, name: c.name, phone: c.phone }) };
   }));
 });
 
-app.post('/api/campaigns/:id/start', (req, res) => {
-  const c = getCampaign(req.params.id);
+app.post('/api/campaigns/:id/start', async (req, res) => {
+  const c = await getCampaign(req.params.id);
   if (c.status !== 'draft') throw bad('Запустить можно только черновик');
   const days = int(req.body?.exclude_recent_days, 0, 0, 3650);
   const conds = ['c.opted_out = 0'];
   const args = [c.id];
-  if (c.list_id !== null) { conds.push('c.id IN (SELECT contact_id FROM list_contacts WHERE list_id = ?)'); args.push(c.list_id); }
+  if (c.list_id !== null) {conds.push('c.id IN (SELECT contact_id FROM list_contacts WHERE list_id = ?)');args.push(c.list_id);}
   if (days > 0) {
     conds.push(`NOT EXISTS (SELECT 1 FROM messages m WHERE m.contact_id = c.id
       AND m.status IN ('sent', 'delivered', 'read') AND m.sent_at >= ?)`);
     args.push(Date.now() - days * 86400000);
   }
-  const added = db.transaction(() => {
-    const r = db.prepare(`INSERT OR IGNORE INTO messages(campaign_id, contact_id, phone, status)
+  const added = await db.transaction(async () => {
+    const r = await db.prepare(`INSERT OR IGNORE INTO messages(campaign_id, contact_id, phone, status)
       SELECT ?, c.id, c.phone, 'pending' FROM contacts c WHERE ${conds.join(' AND ')} ORDER BY c.id`).run(...args);
-    if (r.changes) db.prepare("UPDATE campaigns SET status = 'running', started_at = ? WHERE id = ?").run(Date.now(), c.id);
+    if (r.changes) await db.prepare("UPDATE campaigns SET status = 'running', started_at = ? WHERE id = ?").run(Date.now(), c.id);
     return r.changes;
   })();
   if (!added) throw bad('Нет получателей: база пуста, все в стоп-листе или всем уже писали недавно');
-  logEvent(`Кампания «${c.name}» запущена, получателей: ${added}`);
-  sendCampaign(res, c.id);
+  await logEvent(`Кампания «${c.name}» запущена, получателей: ${added}`);
+  await sendCampaign(res, c.id);
 });
 
 function transition(action, from, to, label) {
-  app.post(`/api/campaigns/:id/${action}`, (req, res) => {
-    const c = getCampaign(req.params.id);
+  app.post(`/api/campaigns/:id/${action}`, async (req, res) => {
+    const c = await getCampaign(req.params.id);
     if (!from.includes(c.status)) throw bad(`Действие недоступно в статусе «${c.status}»`);
-    db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run(to, c.id);
-    logEvent(`Кампания «${c.name}»: ${label}`);
-    sendCampaign(res, c.id);
+    await db.prepare('UPDATE campaigns SET status = ? WHERE id = ?').run(to, c.id);
+    await logEvent(`Кампания «${c.name}»: ${label}`);
+    await sendCampaign(res, c.id);
   });
 }
 transition('pause', ['running'], 'paused', 'пауза');
 transition('resume', ['paused'], 'running', 'продолжена');
 transition('stop', ['running', 'paused'], 'stopped', 'остановлена');
 
-app.post('/api/campaigns/:id/retry', (req, res) => {
-  const c = getCampaign(req.params.id);
+app.post('/api/campaigns/:id/retry', async (req, res) => {
+  const c = await getCampaign(req.params.id);
   if (c.status === 'draft') throw bad('Кампания ещё не запускалась');
-  const n = db.transaction(() => {
-    const r = db.prepare("UPDATE messages SET status = 'pending', error = NULL, id_message = NULL WHERE campaign_id = ? AND status = 'failed'").run(c.id);
-    if (r.changes && c.status !== 'paused') db.prepare("UPDATE campaigns SET status = 'running', finished_at = NULL WHERE id = ?").run(c.id);
+  const n = await db.transaction(async () => {
+    const r = await db.prepare("UPDATE messages SET status = 'pending', error = NULL, id_message = NULL WHERE campaign_id = ? AND status = 'failed'").run(c.id);
+    if (r.changes && c.status !== 'paused') await db.prepare("UPDATE campaigns SET status = 'running', finished_at = NULL WHERE id = ?").run(c.id);
     return r.changes;
   })();
   if (!n) throw bad('В кампании нет сообщений с ошибками');
-  logEvent(`Кампания «${c.name}»: повтор ошибок, сообщений: ${n}`);
-  sendCampaign(res, c.id);
+  await logEvent(`Кампания «${c.name}»: повтор ошибок, сообщений: ${n}`);
+  await sendCampaign(res, c.id);
 });
 
 const MESSAGE_STATUSES = ['pending', 'sending', 'sent', 'delivered', 'read', 'failed', 'no_wa', 'skipped'];
 function messageFilter(c, q) {
   const conds = ['m.campaign_id = ?'];
   const args = [c.id];
-  if (MESSAGE_STATUSES.includes(q.status)) { conds.push('m.status = ?'); args.push(q.status); }
+  if (MESSAGE_STATUSES.includes(q.status)) {conds.push('m.status = ?');args.push(q.status);}
   if (q.replied === '1') conds.push('m.replied = 1');
   return { where: conds.join(' AND '), args };
 }
-app.get('/api/campaigns/:id/messages', (req, res) => {
-  const c = getCampaign(req.params.id);
+app.get('/api/campaigns/:id/messages', async (req, res) => {
+  const c = await getCampaign(req.params.id);
   const { where, args } = messageFilter(c, req.query);
   const limit = int(req.query.limit, 50, 1, 500);
   const offset = int(req.query.offset, 0, 0, 1e9);
-  const total = db.prepare(`SELECT COUNT(*) n FROM messages m WHERE ${where}`).get(...args).n;
-  const rows = db.prepare(`SELECT m.id, m.phone, m.status, m.error, m.replied, m.sent_at, m.text, m.instance_id,
+  const total = (await db.prepare(`SELECT COUNT(*) n FROM messages m WHERE ${where}`).get(...args)).n;
+  const rows = await db.prepare(`SELECT m.id, m.phone, m.status, m.error, m.replied, m.sent_at, m.text, m.instance_id,
       ct.name AS contact_name, i.name AS instance_name
     FROM messages m LEFT JOIN contacts ct ON ct.id = m.contact_id LEFT JOIN instances i ON i.id = m.instance_id
     WHERE ${where} ORDER BY m.id LIMIT ? OFFSET ?`).all(...args, limit, offset);
@@ -634,22 +649,22 @@ app.get('/api/campaigns/:id/messages', (req, res) => {
 });
 
 // Экспорт CSV: UTF-8 с BOM, разделитель ;
-app.get('/api/campaigns/:id/export.csv', (req, res) => {
-  const c = getCampaign(req.params.id);
+app.get('/api/campaigns/:id/export.csv', async (req, res) => {
+  const c = await getCampaign(req.params.id);
   const { where, args } = messageFilter(c, req.query);
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="campaign-${c.id}.csv"`);
   res.write('﻿' + ['Телефон', 'Имя', 'Статус', 'Ответил', 'Номер отправителя', 'Отправлено', 'Ошибка', 'Текст'].map(csvCell).join(';') + '\r\n');
   const fmt = new Intl.DateTimeFormat('ru-RU', { timeZone: TZ, dateStyle: 'short', timeStyle: 'medium' });
-  const it = db.prepare(`SELECT m.*, ct.name AS contact_name, i.name AS instance_name
+  const it = await db.prepare(`SELECT m.*, ct.name AS contact_name, i.name AS instance_name
     FROM messages m LEFT JOIN contacts ct ON ct.id = m.contact_id LEFT JOIN instances i ON i.id = m.instance_id
-    WHERE ${where} ORDER BY m.id`).iterate(...args);
+    WHERE ${where} ORDER BY m.id`).all(...args);
   let chunk = '';
   let n = 0;
   for (const m of it) {
-    chunk += [m.phone, m.contact_name, m.status, m.replied ? 'да' : '', m.instance_name, m.sent_at ? fmt.format(m.sent_at) : '', m.error, m.text]
-      .map(csvCell).join(';') + '\r\n';
-    if (++n % 2000 === 0) { res.write(chunk); chunk = ''; }
+    chunk += [m.phone, m.contact_name, m.status, m.replied ? 'да' : '', m.instance_name, m.sent_at ? fmt.format(m.sent_at) : '', m.error, m.text].
+    map(csvCell).join(';') + '\r\n';
+    if (++n % 2000 === 0) {res.write(chunk);chunk = '';}
   }
   res.end(chunk);
 });
@@ -659,14 +674,14 @@ const MEDIA_EXT = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'mov', 'm
 const mediaUpload = multer({
   storage: multer.diskStorage({
     destination: MEDIA_DIR,
-    filename: (req, file, cb) => cb(null, `${Date.now().toString(36)}-${crypto.randomBytes(6).toString('hex')}${path.extname(file.originalname).toLowerCase()}`),
+    filename: (req, file, cb) => cb(null, `${Date.now().toString(36)}-${crypto.randomBytes(6).toString('hex')}${path.extname(file.originalname).toLowerCase()}`)
   }),
   limits: { fileSize: 100 * 1024 * 1024, files: 1 },
   fileFilter: (req, file, cb) => {
     const ext = path.extname(file.originalname).slice(1).toLowerCase();
-    if (MEDIA_EXT.has(ext)) cb(null, true);
-    else cb(bad(`Тип файла .${ext || '?'} не поддерживается`));
-  },
+    if (MEDIA_EXT.has(ext)) cb(null, true);else
+    cb(bad(`Тип файла .${ext || '?'} не поддерживается`));
+  }
 });
 app.post('/api/media', mediaUpload.single('file'), (req, res) => {
   if (!req.file) throw bad('Файл не получен');
@@ -675,73 +690,74 @@ app.post('/api/media', mediaUpload.single('file'), (req, res) => {
 });
 
 // ───────── Ответы и стоп-лист ─────────
-app.get('/api/incoming', (req, res) => {
+app.get('/api/incoming', async (req, res) => {
   const limit = int(req.query.limit, 50, 1, 500);
   const offset = int(req.query.offset, 0, 0, 1e9);
   res.json({
-    total: db.prepare('SELECT COUNT(*) n FROM incoming').get().n,
-    rows: db.prepare(`SELECT n.*, i.name AS instance_name, c.name AS contact_name FROM incoming n
+    total: (await db.prepare('SELECT COUNT(*) n FROM incoming').get()).n,
+    rows: await db.prepare(`SELECT n.*, i.name AS instance_name, c.name AS contact_name FROM incoming n
       LEFT JOIN instances i ON i.id = n.instance_id LEFT JOIN contacts c ON c.phone = n.phone
-      ORDER BY n.id DESC LIMIT ? OFFSET ?`).all(limit, offset),
+      ORDER BY n.id DESC LIMIT ? OFFSET ?`).all(limit, offset)
   });
 });
-app.get('/api/optouts', (req, res) => {
+app.get('/api/optouts', async (req, res) => {
   const limit = int(req.query.limit, 50, 1, 500);
   const offset = int(req.query.offset, 0, 0, 1e9);
   res.json({
-    total: db.prepare('SELECT COUNT(*) n FROM contacts WHERE opted_out = 1').get().n,
-    rows: db.prepare('SELECT phone, name, opted_out_at FROM contacts WHERE opted_out = 1 ORDER BY opted_out_at DESC LIMIT ? OFFSET ?').all(limit, offset),
+    total: (await db.prepare('SELECT COUNT(*) n FROM contacts WHERE opted_out = 1').get()).n,
+    rows: await db.prepare('SELECT phone, name, opted_out_at FROM contacts WHERE opted_out = 1 ORDER BY opted_out_at DESC LIMIT ? OFFSET ?').all(limit, offset)
   });
 });
-app.post('/api/optouts', (req, res) => {
+app.post('/api/optouts', async (req, res) => {
   const raw = Array.isArray(req.body?.phones) ? req.body.phones : String(req.body?.phones ?? req.body?.phone ?? '').split(/[\n,;]+/);
   const phones = [...new Set(raw.map(normalizePhone).filter(Boolean))];
   if (!phones.length) throw bad('Не найдено ни одного корректного номера');
-  for (const p of phones) optOut(p, 'добавлен вручную');
+  for (const p of phones) await optOut(p, 'добавлен вручную');
   res.json({ ok: true, added: phones.length });
 });
-app.delete('/api/optouts/:phone', (req, res) => {
-  const r = db.prepare('UPDATE contacts SET opted_out = 0, opted_out_at = NULL WHERE phone = ? AND opted_out = 1').run(String(req.params.phone));
+app.delete('/api/optouts/:phone', async (req, res) => {
+  const r = await db.prepare('UPDATE contacts SET opted_out = 0, opted_out_at = NULL WHERE phone = ? AND opted_out = 1').run(String(req.params.phone));
   if (!r.changes) throw new HttpError(404, 'Номер не найден в стоп-листе');
-  logEvent(`${req.params.phone} удалён из стоп-листа вручную`, 'warn');
+  await logEvent(`${req.params.phone} удалён из стоп-листа вручную`, 'warn');
   res.json({ ok: true });
 });
-app.get('/api/settings', (req, res) => res.json({ stop_words: getSetting('stop_words') }));
-app.put('/api/settings', (req, res) => {
+app.get('/api/settings', async (req, res) => res.json({ stop_words: await getSetting('stop_words') }));
+app.put('/api/settings', async (req, res) => {
   const words = String(req.body?.stop_words ?? '').split(/[,\n;]+/).map((w) => w.trim().toLowerCase()).filter(Boolean);
-  setSetting('stop_words', [...new Set(words)].join(', '));
-  logEvent('Стоп-слова обновлены');
-  res.json({ stop_words: getSetting('stop_words') });
+  await setSetting('stop_words', [...new Set(words)].join(', '));
+  await logEvent('Стоп-слова обновлены');
+  res.json({ stop_words: await getSetting('stop_words') });
 });
 
 // ───────── Журнал и сводка ─────────
-app.get('/api/events', (req, res) => {
+app.get('/api/events', async (req, res) => {
   const limit = int(req.query.limit, 100, 1, 500);
   const offset = int(req.query.offset, 0, 0, 1e9);
   res.json({
-    total: db.prepare('SELECT COUNT(*) n FROM events').get().n,
-    rows: db.prepare(`SELECT e.*, i.name AS instance_name FROM events e LEFT JOIN instances i ON i.id = e.instance_id
-      ORDER BY e.id DESC LIMIT ? OFFSET ?`).all(limit, offset),
+    total: (await db.prepare('SELECT COUNT(*) n FROM events').get()).n,
+    rows: await db.prepare(`SELECT e.*, i.name AS instance_name FROM events e LEFT JOIN instances i ON i.id = e.instance_id
+      ORDER BY e.id DESC LIMIT ? OFFSET ?`).all(limit, offset)
   });
 });
-app.get('/api/overview', (req, res) => {
+app.get('/api/overview', async (req, res) => {
   const today = dayInTz();
-  const insts = db.prepare('SELECT * FROM instances').all();
+  const insts = await db.prepare('SELECT * FROM instances').all();
   const active = insts.filter((i) => i.enabled && i.state === 'authorized');
+  const sentCounts = await Promise.all(insts.map((i) => worker.sentToday(i.id, today)));
   res.json({
-    contacts: db.prepare('SELECT COUNT(*) n FROM contacts').get().n,
-    opted_out: db.prepare('SELECT COUNT(*) n FROM contacts WHERE opted_out = 1').get().n,
-    lists: db.prepare('SELECT COUNT(*) n FROM lists').get().n,
+    contacts: (await db.prepare('SELECT COUNT(*) n FROM contacts').get()).n,
+    opted_out: (await db.prepare('SELECT COUNT(*) n FROM contacts WHERE opted_out = 1').get()).n,
+    lists: (await db.prepare('SELECT COUNT(*) n FROM lists').get()).n,
     instances: insts.length,
     instances_active: active.length,
     instances_stopped: insts.filter((i) => !i.enabled && i.disabled_reason && i.disabled_reason !== 'Выключен вручную').length,
-    sent_today: insts.reduce((n, i) => n + worker.sentToday(i.id, today), 0),
-    limit_today: insts.filter((i) => active.includes(i) || worker.sentToday(i.id, today) > 0)
-      .reduce((n, i) => n + worker.dailyLimit(i, today), 0),
-    queue: db.prepare(`SELECT COUNT(*) n FROM messages m JOIN campaigns c ON c.id = m.campaign_id
-      WHERE c.status IN ('running', 'paused') AND m.status IN ('pending', 'sending')`).get().n,
-    incoming: db.prepare('SELECT COUNT(*) n FROM incoming').get().n,
-    campaigns_started: db.prepare("SELECT COUNT(*) n FROM campaigns WHERE status <> 'draft'").get().n,
+    sent_today: sentCounts.reduce((n, count) => n + count, 0),
+    limit_today: insts.filter((i, index) => active.includes(i) || sentCounts[index] > 0).
+    reduce((n, i) => n + worker.dailyLimit(i, today), 0),
+    queue: (await db.prepare(`SELECT COUNT(*) n FROM messages m JOIN campaigns c ON c.id = m.campaign_id
+      WHERE c.status IN ('running', 'paused') AND m.status IN ('pending', 'sending')`).get()).n,
+    incoming: (await db.prepare('SELECT COUNT(*) n FROM incoming').get()).n,
+    campaigns_started: (await db.prepare("SELECT COUNT(*) n FROM campaigns WHERE status <> 'draft'").get()).n
   });
 });
 
@@ -754,19 +770,23 @@ app.use(express.static(path.join(__dirname, '..', 'dist'), { index: 'index.html'
 app.use((err, req, res, next) => {
   let status = err.status || 500;
   let message = err.message || 'Внутренняя ошибка';
-  if (err.code === 'LIMIT_FILE_SIZE') { status = 400; message = 'Файл слишком большой (максимум 100 МБ)'; }
+  if (err.code === 'LIMIT_FILE_SIZE') {status = 400;message = 'Файл слишком большой (максимум 100 МБ)';}
   if (status >= 500) console.error(err);
   res.status(status).json({ error: message });
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`Pulse WhatsApp: http://localhost:${PORT} (TZ ${TZ})`);
-  worker.start();
-});
+let server;
+initDb().then(() => {
+  server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Pulse WhatsApp: http://localhost:${PORT} (TZ ${TZ})`);
+    worker.start().catch((e) => console.error('worker start', e));
+  });
+}).catch((e) => { console.error('Database initialization failed', e); process.exit(1); });
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     worker.stop();
-    server.close(() => { db.close(); process.exit(0); });
+    if (server) server.close(() => { db.close().finally(() => process.exit(0)); });
+    else db.close().finally(() => process.exit(0));
     setTimeout(() => process.exit(0), 3000).unref();
   });
 }
