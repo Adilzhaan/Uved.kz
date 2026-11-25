@@ -457,7 +457,7 @@ function basePage() {
   );
 }
 // Добавление подключения GREEN-API: вставить данные целиком или заполнить по полям
-function addConnectionDialog(mode = "paste", notice = "") {
+function addConnectionDialog(mode = "fields", notice = "") {
   dialogState = { kind: "form" };
   const tab = (key, label) =>
     `<button type="button" class="segment${mode === key ? " active" : ""}" data-act="add-mode" data-mode="${key}" aria-pressed="${mode === key}">${label}</button>`;
@@ -465,14 +465,14 @@ function addConnectionDialog(mode = "paste", notice = "") {
   const form =
     mode === "paste"
       ? `<form id="instance-paste-form"><div class="field"><label for="i-raw">Данные из кабинета GREEN-API</label><textarea id="i-raw" name="raw" rows="6" required placeholder="apiUrl  https://7107.api.greenapi.com&#10;idInstance  7107000000&#10;apiTokenInstance  2cc92d61…"></textarea><small>Откройте инстанс в кабинете GREEN-API, выделите мышкой всю табличку с данными, скопируйте и вставьте сюда. Нужные значения найдём сами.</small></div>${name}</form>`
-      : `<form id="instance-form"><div class="form-grid"><div class="field"><label for="i-id">idInstance</label><input id="i-id" name="id_instance" inputmode="numeric" required placeholder="7107000000"/></div><div class="field"><label for="i-token">apiTokenInstance</label><input id="i-token" name="api_token" required autocomplete="off"/></div></div><div class="field" style="margin-top:17px"><label for="i-url">apiUrl</label><input id="i-url" name="api_url" placeholder="https://7107.api.greenapi.com"/><small>Указан в карточке инстанса. Если оставить пустым — возьмём адрес по умолчанию.</small></div>${name}</form>`;
+      : `<form id="instance-form">${name}<div class="form-grid"><div class="field"><label for="i-id">idInstance</label><input id="i-id" name="id_instance" inputmode="numeric" required placeholder="7107000000"/></div><div class="field"><label for="i-token">apiTokenInstance</label><input id="i-token" name="api_token" required autocomplete="off"/></div></div><div class="field" style="margin-top:17px"><label for="i-url">apiUrl</label><input id="i-url" name="api_url" placeholder="https://7107.api.greenapi.com"/><small>Указан в карточке инстанса. Если оставить пустым — возьмём адрес по умолчанию.</small></div></form>`;
   modal(
     "Добавить номер",
-    `${notice ? `<p class="number-note" style="margin-bottom:16px">${esc(notice)}</p>` : ""}<p>Каждому номеру WhatsApp нужно своё подключение GREEN-API. Создайте и оплатите его в кабинете GREEN-API, затем добавьте сюда — любым из двух способов.</p><div class="segments" role="group" aria-label="Способ добавления">${tab("paste", "Вставить данные целиком")}${tab("fields", "Заполнить по полям")}</div>${form}`,
+    `${notice ? `<p class="number-note" style="margin-bottom:16px">${esc(notice)}</p>` : ""}<p>Каждому номеру WhatsApp нужно своё подключение GREEN-API. Создайте и оплатите его в кабинете GREEN-API, затем добавьте сюда — любым из двух способов.</p><div class="segments" role="group" aria-label="Способ добавления">${tab("fields", "Заполнить по полям")}${tab("paste", "Вставить данные целиком")}</div>${form}`,
     button("Отмена", null, "close") +
       `<button type="submit" form="${mode === "paste" ? "instance-paste-form" : "instance-form"}" class="button primary">${icon("check")}Добавить номер</button>`,
   );
-  $(mode === "paste" ? "#i-raw" : "#i-id").focus();
+  $(mode === "paste" ? "#i-raw" : "#i-name").focus();
 }
 const instanceForm = () => addConnectionDialog("fields");
 async function instanceAdded(r) {
@@ -696,14 +696,16 @@ async function openCampaignForm(existing = null, copy = false, preset = null) {
 }
 // Одна кнопка: сервер выдаёт свободное подключение или создаёт новое, дальше — только QR-код
 async function connectNumber() {
+  // без автосоздания подключений кнопка сразу открывает форму добавления номера
+  if (!me?.self_connect) return addConnectionDialog("fields");
   let inst;
   try {
     inst = await post("/numbers/connect");
   } catch (e) {
-    return addConnectionDialog("paste", e.message);
+    return addConnectionDialog("fields", e.message);
   }
   // свободных подключений нет — сразу предлагаем добавить новое
-  if (inst.full) return addConnectionDialog("paste");
+  if (inst.full) return addConnectionDialog("fields");
   await refresh();
   qrDialog(inst.id);
 }
