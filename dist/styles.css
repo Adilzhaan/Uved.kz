@@ -2696,3 +2696,54 @@ details.advanced[open] summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ───── Добавление номера: способы ───── */
+.segments {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  margin: 16px 0 18px;
+  border-radius: 10px;
+  background: #eef2f9;
+}
+.segment {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #5b6880;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.segment.active {
+  background: white;
+  color: var(--dark);
+  box-shadow: 0 1px 2px rgba(25, 36, 59, 0.14);
+}
+.segment:focus-visible {
+  outline: 2px solid #9bb8f5;
+  outline-offset: 1px;
+}
+.auth-code {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin: 6px 0 16px;
+  padding: 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #f7f9fe;
+  color: var(--dark);
+  font-size: 32px;
+  font-weight: 750;
+  letter-spacing: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.auth-code span {
+  color: #a6b2c6;
+  letter-spacing: 0;
+}

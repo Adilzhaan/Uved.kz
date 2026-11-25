@@ -425,7 +425,7 @@ async function uiTests() {
     await page.waitForSelector('#qr-box:has-text("Подключено")', { timeout: 10000 });
     await page.waitForSelector('#qr-box [data-act=campaign-new]');
     await page.click('dialog [data-act=close]');
-    await page.waitForSelector('tr:has-text("Номер C") .badge:has-text("Подключён")');
+    await page.waitForSelector('.number-card:has-text("Номер C") .badge:has-text("Подключён")');
     // «Подключить номер» одной кнопкой: подключение создаётся само, остаётся только QR
     await page.click('.heading-actions [data-act=connect-number]');
     await page.waitForSelector('#qr-box .qr-steps');

@@ -456,16 +456,49 @@ function basePage() {
     `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Загруженные базы <span class="section-count">${rows.length}</span></h2><span class="section-caption">${num(data.overview.contacts)} уникальных контактов</span></div>${rows.length ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название базы</th><th>Контактов</th><th>Дата загрузки</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows.map((l) => `<tr><td><span class="campaign-name"><span class="mail-tile">${icon("file")}</span><strong>${esc(l.name)}</strong></span></td><td data-label="Контактов">${num(l.contacts)}</td><td data-label="Загружена">${dateTime(l.created_at)}</td><td class="connection-actions"><div class="row-actions"><a class="button compact" href="/api/lists/${l.id}/recipients.csv" download="recipients.csv">${icon("download")}Получатели</a>${button("Удалить", "trash", "list-delete", "text danger-button", `data-id="${l.id}"`)}</div></td></tr>`).join("")}</tbody></table></div>` : empty("database", "Добавьте базу получателей", "Загрузите файл с номерами телефонов. Имена и другие данные о контактах сохранятся вместе с базой.")}</section>`
   );
 }
-function instanceForm() {
+// Добавление подключения GREEN-API: вставить данные целиком или заполнить по полям
+function addConnectionDialog(mode = "paste", notice = "") {
   dialogState = { kind: "form" };
+  const tab = (key, label) =>
+    `<button type="button" class="segment${mode === key ? " active" : ""}" data-act="add-mode" data-mode="${key}" aria-pressed="${mode === key}">${label}</button>`;
+  const name = `<div class="field"><label for="i-name">Название номера</label><input id="i-name" name="name" placeholder="Например, Номер 2" maxlength="80"/><small>Как вам удобно его называть. Можно не заполнять.</small></div>`;
+  const form =
+    mode === "paste"
+      ? `<form id="instance-paste-form"><div class="field"><label for="i-raw">Данные из кабинета GREEN-API</label><textarea id="i-raw" name="raw" rows="6" required placeholder="apiUrl  https://7107.api.greenapi.com&#10;idInstance  7107000000&#10;apiTokenInstance  2cc92d61…"></textarea><small>Откройте инстанс в кабинете GREEN-API, выделите мышкой всю табличку с данными, скопируйте и вставьте сюда. Нужные значения найдём сами.</small></div>${name}</form>`
+      : `<form id="instance-form"><div class="form-grid"><div class="field"><label for="i-id">idInstance</label><input id="i-id" name="id_instance" inputmode="numeric" required placeholder="7107000000"/></div><div class="field"><label for="i-token">apiTokenInstance</label><input id="i-token" name="api_token" required autocomplete="off"/></div></div><div class="field" style="margin-top:17px"><label for="i-url">apiUrl</label><input id="i-url" name="api_url" placeholder="https://7107.api.greenapi.com"/><small>Указан в карточке инстанса. Если оставить пустым — возьмём адрес по умолчанию.</small></div>${name}</form>`;
   modal(
     "Добавить номер",
-    `<p>Данные инстанса — в личном кабинете GREEN-API. После добавления откроется QR-код для подключения WhatsApp.</p><form id="instance-form"><div class="field"><label for="i-name">Название</label><input id="i-name" name="name" placeholder="Например, Номер 1" maxlength="80"/></div><div class="form-grid"><div class="field"><label for="i-id">idInstance</label><input id="i-id" name="id_instance" inputmode="numeric" required placeholder="1101000001"/></div><div class="field"><label for="i-token">apiTokenInstance</label><input id="i-token" name="api_token" type="password" required autocomplete="off"/></div></div><div class="field" style="margin-top:17px"><label for="i-url">apiUrl</label><input id="i-url" name="api_url" placeholder="https://api.green-api.com"/><small>Указан в карточке инстанса, например https://1101.api.green-api.com. Пусто — адрес по умолчанию.</small></div></form>`,
+    `${notice ? `<p class="number-note" style="margin-bottom:16px">${esc(notice)}</p>` : ""}<p>Каждому номеру WhatsApp нужно своё подключение GREEN-API. Создайте и оплатите его в кабинете GREEN-API, затем добавьте сюда — любым из двух способов.</p><div class="segments" role="group" aria-label="Способ добавления">${tab("paste", "Вставить данные целиком")}${tab("fields", "Заполнить по полям")}</div>${form}`,
     button("Отмена", null, "close") +
-      `<button type="submit" form="instance-form" class="button primary">${icon("check")}Добавить</button>`,
+      `<button type="submit" form="${mode === "paste" ? "instance-paste-form" : "instance-form"}" class="button primary">${icon("check")}Добавить номер</button>`,
   );
+  $(mode === "paste" ? "#i-raw" : "#i-id").focus();
 }
-
+const instanceForm = () => addConnectionDialog("fields");
+async function instanceAdded(r) {
+  toast(
+    r.webhook === "ok" || r.webhook === "skipped"
+      ? "Номер добавлен"
+      : `Номер добавлен, но webhook не установлен: ${r.webhook}`,
+  );
+  await refresh();
+  if (r.state === "authorized") instanceDetail(r.id);
+  else qrDialog(r.id);
+}
+// Подключение без камеры: WhatsApp выдаёт код, который вводят на телефоне
+function codeDialog(id) {
+  const i = data.instances.find((x) => x.id === Number(id));
+  if (!i) return;
+  clearTimeout(qrTimer);
+  dialogState = { kind: "code", id: i.id };
+  modal(
+    `Подключение по коду · ${esc(i.name)}`,
+    `<p>Подходит, если камера не работает или телефон и компьютер — одно устройство. Введите номер WhatsApp, который подключаете.</p><form id="auth-code-form" data-id="${i.id}"><div class="field"><label for="code-phone">Номер телефона WhatsApp</label><input id="code-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 701 123 45 67" required/></div><div id="code-result" class="import-result" aria-live="polite"></div></form>`,
+    button("Подключить по QR-коду", "qr", "instance-qr", "", `data-id="${i.id}"`) +
+      `<button type="submit" form="auth-code-form" class="button primary">${icon("check")}Получить код</button>`,
+  );
+  $("#code-phone").focus();
+}
 function manualMessageDialog(selectedId) {
   const ready = data.instances.filter(
     (i) => i.state === "authorized" && i.enabled,
@@ -509,11 +542,13 @@ function instanceDetail(id) {
 function qrDialog(id) {
   const i = data.instances.find((x) => x.id === Number(id));
   if (!i) return;
+  clearTimeout(qrTimer);
   dialogState = { kind: "qr", id: i.id };
   modal(
     `Подключение · ${esc(i.name)}`,
     `<div class="qr-box" id="qr-box"><p>Запрашиваем QR-код…</p></div>`,
-    button("Закрыть", null, "close"),
+    button("Подключить по коду, без камеры", null, "instance-code", "", `data-id="${i.id}"`) +
+      button("Закрыть", null, "close"),
   );
   const poll = async () => {
     if (dialogState?.kind !== "qr" || dialogState.id !== i.id) return;
@@ -664,15 +699,11 @@ async function connectNumber() {
   let inst;
   try {
     inst = await post("/numbers/connect");
-    if (inst.full) throw new Error(inst.message);
   } catch (e) {
-    dialogState = { kind: "form" };
-    return modal(
-      "Не получилось подключить номер",
-      `<p>${esc(e.message)}</p>`,
-      button("Понятно", null, "close", "primary"),
-    );
+    return addConnectionDialog("paste", e.message);
   }
+  // свободных подключений нет — сразу предлагаем добавить новое
+  if (inst.full) return addConnectionDialog("paste");
   await refresh();
   qrDialog(inst.id);
 }
@@ -895,6 +926,8 @@ const actions = {
   "manual-message": (el) => manualMessageDialog(el.dataset.id),
   "instance-open": (el) => instanceDetail(el.dataset.id),
   "instance-qr": (el) => qrDialog(el.dataset.id),
+  "instance-code": (el) => codeDialog(el.dataset.id),
+  "add-mode": (el) => addConnectionDialog(el.dataset.mode),
   "instance-refresh": (el) =>
     instanceAction(
       el.dataset.id,
@@ -1100,16 +1133,45 @@ const submitters = {
     goPage("templates");
     await refresh();
   },
-  "instance-form": async (form) => {
-    const r = await post("/instances", Object.fromEntries(new FormData(form)));
-    toast(
-      r.webhook === "ok" || r.webhook === "skipped"
-        ? "Номер добавлен"
-        : `Номер добавлен, но webhook не установлен: ${r.webhook}`,
-    );
-    await refresh();
-    if (r.state === "authorized") instanceDetail(r.id);
-    else qrDialog(r.id);
+  "instance-form": async (form) =>
+    instanceAdded(
+      await post("/instances", Object.fromEntries(new FormData(form))),
+    ),
+  "instance-paste-form": async (form) =>
+    instanceAdded(
+      await post("/instances", Object.fromEntries(new FormData(form))),
+    ),
+  "auth-code-form": async (form) => {
+    const id = Number(form.dataset.id);
+    const out = $("#code-result");
+    out.textContent = "Запрашиваем код…";
+    let r;
+    try {
+      r = await post(`/instances/${id}/auth-code`, {
+        phone: new FormData(form).get("phone"),
+      });
+    } catch (e) {
+      out.innerHTML = `<p class="error-text">${esc(e.message)}</p>`;
+      return;
+    }
+    out.innerHTML = `<div class="auth-code" aria-label="Код подключения">${esc(r.code.slice(0, 4))}<span>–</span>${esc(r.code.slice(4))}</div><ol class="qr-steps"><li>Откройте <strong>WhatsApp</strong> на телефоне с этим номером.</li><li>Нажмите <strong>⋮</strong> вверху (на iPhone — <strong>«Настройки»</strong> внизу) и выберите <strong>«Связанные устройства»</strong>.</li><li>Нажмите <strong>«Привязка устройства»</strong>, затем <strong>«Связать по номеру телефона»</strong> и введите этот код.</li></ol><p class="muted" id="code-wait">Ждём подтверждения на телефоне. Это окно закрывать не нужно.</p>`;
+    const poll = async () => {
+      if (dialogState?.kind !== "code" || dialogState.id !== id) return;
+      try {
+        const st = await post(`/instances/${id}/refresh`);
+        if (dialogState?.kind !== "code" || !out.isConnected) return;
+        if (st.state === "authorized") {
+          out.innerHTML = `<div class="qr-box"><span class="mail-tile" style="margin:0 auto">${icon("checkCircle")}</span><p><strong>Подключено.</strong><br>Номер готов к работе.</p></div>`;
+          refresh();
+          return;
+        }
+      } catch {
+        /* повторим */
+      }
+      qrTimer = setTimeout(poll, 4000);
+    };
+    clearTimeout(qrTimer);
+    qrTimer = setTimeout(poll, 3000);
   },
   "import-form": async (form) => {
     const out = $("#import-result");

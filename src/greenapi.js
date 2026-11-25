@@ -43,6 +43,7 @@ function client(inst) {
   return {
     getStateInstance: () => call('getStateInstance'),
     qr: () => call('qr'),
+    getAuthorizationCode: (phone) => call('getAuthorizationCode', { phoneNumber: Number(phone) }),
     logout: () => call('logout'),
     getWaSettings: () => call('getWaSettings'),
     setSettings: (settings) => call('setSettings', settings),

@@ -116,6 +116,10 @@ const server = http.createServer((req, res) => {
           return out(200, { type: 'alreadyLogged', message: 'instance account already authorized' });
         }
         return out(200, { type: 'qrCode', message: QR_PNG });
+      case 'getAuthorizationCode':
+        if (i.state === 'authorized') return out(200, { status: false, code: '' });
+        setTimeout(() => { i.state = 'authorized'; hook(id, { typeWebhook: 'stateInstanceChanged', stateInstance: 'authorized' }, 10); }, 1500);
+        return out(200, { status: true, code: 'ABCD1234' });
       case 'logout': i.state = 'notAuthorized'; i.qrRequests = 0; return out(200, { isLogout: true });
       case 'getWaSettings': return out(200, { wid: `7700${id}@c.us`, phone: `7700${id}`, stateInstance: i.state });
       case 'setSettings': if (body.webhookUrl !== undefined) i.webhookUrl = body.webhookUrl; return out(200, { saveSettings: true });

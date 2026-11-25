@@ -190,14 +190,30 @@ app.get('/api/instances', async (req, res) => {
   res.json(await Promise.all((await db.prepare('SELECT * FROM instances ORDER BY id').all()).map((i) => instanceView(i, today, stats))));
 });
 
+// Разбор данных, скопированных из кабинета GREEN-API одним куском (apiUrl, idInstance, apiTokenInstance)
+function parseInstanceText(raw) {
+  const text = String(raw || '').slice(0, 5000);
+  const pick = (labelled, fallback) => (text.match(labelled) || text.match(fallback) || [])[1] || '';
+  return {
+    api_url: pick(/apiUrl["'\s:=]*(https?:\/\/[^\s"',]+)/i, /(https?:\/\/[^\s"',]+)/i),
+    id_instance: pick(/idInstance["'\s:=]*(\d{4,20})/i, /(?<![\w.])(\d{8,20})(?![\w.])/),
+    api_token: pick(/apiTokenInstance["'\s:=]*([A-Za-z0-9]{20,200})/i, /(?<![A-Za-z0-9])([a-f0-9]{30,200})(?![A-Za-z0-9])/i)
+  };
+}
+
 app.post('/api/instances', wrap(async (req, res) => {
   const b = req.body || {};
+  const pasted = b.raw !== undefined;
+  const src = pasted ? parseInstanceText(b.raw) : b;
   const inst = {
     name: String(b.name || '').trim().slice(0, 80),
-    id_instance: String(b.id_instance || '').trim(),
-    api_token: String(b.api_token || '').trim(),
-    api_url: String(b.api_url || '').trim().replace(/\/+$/, '') || DEFAULT_API_URL
+    id_instance: String(src.id_instance || '').trim(),
+    api_token: String(src.api_token || '').trim(),
+    api_url: String(src.api_url || '').trim().replace(/\/+$/, '') || DEFAULT_API_URL
   };
+  if (pasted && (!inst.id_instance || !inst.api_token)) {
+    throw bad('Не нашли в тексте idInstance и apiTokenInstance. Скопируйте данные из карточки инстанса в кабинете GREEN-API целиком или заполните поля по одному.');
+  }
   if (!/^\d{4,20}$/.test(inst.id_instance)) throw bad('idInstance должен состоять из цифр');
   if (!/^[A-Za-z0-9]{6,200}$/.test(inst.api_token)) throw bad('Укажите apiTokenInstance');
   if (!/^https?:\/\/[^\s/]+/.test(inst.api_url)) throw bad('apiUrl должен начинаться с http(s)://');
@@ -208,6 +224,8 @@ app.post('/api/instances', wrap(async (req, res) => {
   try {
     state = (await client(inst).getStateInstance())?.stateInstance || 'unknown'; // проверка кредов
   } catch (e) {
+    if (/expired/i.test(e.message)) throw bad('Это подключение GREEN-API не оплачено (срок истёк). Продлите его в кабинете GREEN-API и добавьте снова.');
+    if (e.status === 401 || e.status === 403) throw bad('GREEN-API не принял данные. Проверьте, что idInstance и apiTokenInstance скопированы полностью.');
     throw new HttpError(400, `Не удалось проверить доступ: ${e.message}`);
   }
   let webhook = 'skipped';
@@ -275,6 +293,17 @@ app.get('/api/instances/:id/qr', wrap(async (req, res) => {
   try {r = await client(inst).qr();} catch (e) {throw greenError(e);}
   if (r?.type === 'alreadyLogged') await worker.refreshInstance(inst).catch(() => {});
   res.json({ type: r?.type || 'error', message: r?.message || '' });
+}));
+
+// Подключение без камеры: WhatsApp выдаёт код, который вводят на телефоне
+app.post('/api/instances/:id/auth-code', wrap(async (req, res) => {
+  const inst = await getInstance(req.params.id);
+  const phone = normalizePhone(req.body?.phone);
+  if (!phone) throw bad('Введите номер телефона с кодом страны, например +7 701 123 45 67');
+  let r;
+  try {r = await client(inst).getAuthorizationCode(phone);} catch (e) {throw greenError(e);}
+  if (!r?.status || !r?.code) throw bad('WhatsApp не выдал код. Проверьте номер телефона или подключите по QR-коду.');
+  res.json({ code: String(r.code), phone });
 }));
 
 app.post('/api/instances/:id/logout', wrap(async (req, res) => {
