@@ -415,7 +415,7 @@ async function uiTests() {
     await page.waitForSelector('dialog .kv');
     await page.click('dialog [data-act=instance-refresh]');
     await page.click('dialog [data-act=close]');
-    await page.click('[data-act=instance-new]'); // ручное добавление — ссылка «для администратора»
+    await page.click('[data-act=instance-new]'); // ручное добавление
     await page.fill('#i-name', 'Номер C');
     await page.fill('#i-id', '1003');
     await page.fill('#i-token', 'goodtoken');

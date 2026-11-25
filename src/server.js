@@ -36,7 +36,7 @@ async function partnerCall(method, payload) {
     throw new HttpError(502, 'Не удалось связаться с GREEN-API. Попробуйте ещё раз через минуту.');
   }
   const body = await r.json().catch(() => null);
-  if (!r.ok) throw new HttpError(502, `GREEN-API отклонил запрос (${r.status}). Обратитесь к администратору.`);
+  if (!r.ok) throw new HttpError(502, `GREEN-API отклонил запрос (${r.status}). Попробуйте ещё раз позже.`);
   return body;
 }
 
@@ -201,13 +201,13 @@ app.post('/api/numbers/connect', wrap(async (req, res) => {
   if (free) return res.json({ ...(await instanceView(free)), created: false });
   const total = (await db.prepare('SELECT COUNT(*) n FROM instances').get()).n;
   // «мест нет» — штатная ситуация, а не ошибка: отвечаем 200 с понятным текстом
-  if (!PARTNER_TOKEN) return res.json({ full: true, message: 'Свободных подключений нет. Попросите администратора добавить ещё одно.' });
-  if (total >= MAX_NUMBERS) return res.json({ full: true, message: `Подключено максимальное число номеров (${MAX_NUMBERS}). Чтобы добавить ещё, обратитесь к администратору.` });
+  if (!PARTNER_TOKEN) return res.json({ full: true, message: 'Свободных подключений нет. Добавьте ещё одно по ссылке «Добавить подключение GREEN-API вручную» внизу страницы.' });
+  if (total >= MAX_NUMBERS) return res.json({ full: true, message: `Подключено максимальное число номеров (${MAX_NUMBERS}).` });
   const name = `Номер ${total + 1}`;
   const settings = { name: `Uved ${name}` };
   if (PUBLIC_URL && WEBHOOK_SECRET) Object.assign(settings, { webhookUrl: webhookUrl(), outgoingWebhook: 'yes', stateWebhook: 'yes', incomingWebhook: 'yes' });
   const created = await partnerCall('createInstance', settings);
-  if (!created?.idInstance || !created?.apiTokenInstance) throw new HttpError(502, 'GREEN-API не создал подключение. Обратитесь к администратору.');
+  if (!created?.idInstance || !created?.apiTokenInstance) throw new HttpError(502, 'GREEN-API не создал подключение. Попробуйте ещё раз позже.');
   const id = (await db.prepare(`INSERT INTO instances(name, id_instance, api_token, api_url, state, managed, created_at)
     VALUES (?, ?, ?, ?, 'starting', 1, ?)`).run(name, String(created.idInstance), String(created.apiTokenInstance), PARTNER_URL, Date.now())).lastInsertRowid;
   await logEvent(`Создано подключение «${name}» (инстанс ${created.idInstance}) через партнёрский API`, 'info', Number(id));
@@ -763,7 +763,7 @@ app.get('/api/overview', async (req, res) => {
 
 app.use('/api', (req, res) => res.status(404).json({ error: 'Не найдено' }));
 
-// ───────── Статика (админка) ─────────
+// ───────── Статика ─────────
 app.use(express.static(path.join(__dirname, '..', 'dist'), { index: 'index.html' }));
 
 // eslint-disable-next-line no-unused-vars
