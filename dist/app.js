@@ -401,8 +401,35 @@ function templateForm(t = null) {
   );
 }
 
+// Доля в процентах, без деления на ноль
+const share = (part, total) =>
+  total ? Math.min(100, Math.round((part / total) * 100)) : 0;
+function numberCard(i) {
+  const on = i.state === "authorized";
+  const a = (label, ic, act, cls = "") =>
+    button(label, ic, act, cls, `data-id="${i.id}"`);
+  const note = !on
+    ? "Номер не подключён — сообщения с него не уходят."
+    : !i.enabled
+      ? `Выключен${i.disabled_reason ? `: ${esc(i.disabled_reason)}` : ""}. Сообщения с него не уходят.`
+      : i.sent_today >= i.limit_today
+        ? "Лимит на сегодня выбран — продолжит завтра."
+        : "";
+  return `<article class="number-card${on && i.enabled ? "" : " is-off"}" data-number="${i.id}">
+<header><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span class="mail-tile">${icon("phone")}</span><span><strong>${esc(i.name)}</strong><small>${i.phone ? phoneFmt(i.phone) : "Ждёт подключения"}</small></span></button>${badge(instanceStates, i.state)}</header>
+<div class="number-today"><div class="progress-caption"><span>Сегодня отправлено</span><strong>${num(i.sent_today)} из ${num(i.limit_today)}</strong></div><div class="big-progress"><span style="width:${share(i.sent_today, i.limit_today)}%"></span></div></div>
+<dl class="number-stats"><div><dt>Отправлено</dt><dd>${num(i.sent_total)}</dd></div><div><dt>Доставлено</dt><dd>${num(i.delivered_total)}</dd></div><div><dt>Прочитано</dt><dd>${num(i.read_total)}</dd></div><div><dt>Ответили</dt><dd>${num(i.replied_total)}</dd></div></dl>
+${note ? `<p class="number-note">${note}</p>` : ""}
+<div class="number-foot">${on ? `<label class="switch"><input type="checkbox" data-toggle-number="${i.id}" ${i.enabled ? "checked" : ""}/><span class="switch-track"></span><span>${i.enabled ? "Участвует в рассылках" : "Не участвует в рассылках"}</span></label>` : a("Подключить по QR", "qr", "instance-qr", "primary compact")}<div class="row-actions">${on && i.enabled ? a("Написать", "message", "manual-message", "compact") : ""}${a("Подробнее", null, "instance-open", "compact")}</div></div>
+</article>`;
+}
 function numbersPage() {
   const rows = data.instances;
+  const ready = rows.filter(isReady);
+  const sum = (key, list = rows) =>
+    list.reduce((n, i) => n + Number(i[key] || 0), 0);
+  const metric = (label, ic, value, bottom) =>
+    `<div class="metric"><div class="metric-label">${label}<span class="metric-icon">${icon(ic)}</span></div><div class="metric-value">${value}</div><div class="metric-bottom">${bottom}</div></div>`;
   return (
     heading(
       "WhatsApp-номера",
@@ -410,7 +437,10 @@ function numbersPage() {
       button("Написать сообщение", "message", "manual-message", "primary") +
         button("Подключить номер", "plus", "connect-number"),
     ) +
-    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Мои номера <span class="section-count">${rows.length}</span></h2><span class="section-caption">${rows.filter((i) => i.state === "authorized").length} подключено</span></div>${rows.length ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название</th><th>Номер телефона</th><th>Подключение</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows.map((i) => `<tr><td><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span class="mail-tile">${icon("phone")}</span><strong>${esc(i.name)}</strong></button></td><td data-label="Телефон">${i.phone ? phoneFmt(i.phone) : '<span class="muted">Ждёт подключения</span>'}</td><td data-label="Статус">${badge(instanceStates, i.state)}</td><td class="connection-actions"><div class="row-actions">${i.state === "authorized" && i.enabled ? button("Написать", "message", "manual-message", "compact", `data-id="${i.id}"`) : ""}${i.state === "authorized" ? button("Управление", null, "instance-open", "compact", `data-id="${i.id}"`) : button("Подключить по QR", "qr", "instance-qr", "primary compact", `data-id="${i.id}"`)}</div></td></tr>`).join("")}</tbody></table></div>` : empty("phone", "Подключите первый номер", "Нажмите «Подключить номер» и наведите камеру телефона на код на экране. Номеров можно подключить несколько.")}</section><p class="page-note">${icon("qr")}Можно подключить несколько номеров — рассылка распределится между ними сама, и пойдёт быстрее.</p><p class="page-note"><button type="button" class="link-button" data-act="instance-new">Добавить подключение GREEN-API вручную</button></p>`
+    (rows.length
+      ? `<div class="metrics">${metric("Номеров в работе", "phone", `${num(ready.length)} из ${num(rows.length)}`, ready.length === rows.length ? "Все номера подключены" : "Остальные выключены или не подключены")}${metric("Отправлено сегодня", "send", num(sum("sent_today")), `Лимит на сегодня: ${num(sum("limit_today", ready))}`)}${metric("Отправлено всего", "checkCircle", num(sum("sent_total")), `Доставлено: ${num(sum("delivered_total"))}`)}${metric("Ответили", "message", num(sum("replied_total")), `Не доставлено: ${num(sum("failed_total"))}`)}</div><div class="number-grid">${rows.map(numberCard).join("")}</div>`
+      : `<section class="panel">${empty("phone", "Подключите первый номер", "Нажмите «Подключить номер» и наведите камеру телефона на код на экране. Номеров можно подключить несколько.")}</section>`) +
+    `<p class="page-note">${icon("qr")}Можно подключить несколько номеров — рассылка распределится между ними сама, и пойдёт быстрее.</p><p class="page-note"><button type="button" class="link-button" data-act="instance-new">Добавить подключение GREEN-API вручную</button></p>`
   );
 }
 function basePage() {
@@ -451,6 +481,18 @@ function manualMessageDialog(selectedId) {
   $("#manual-phone").focus();
 }
 
+// Отправки номера по дням за последнюю неделю
+function weekChart(i) {
+  const week = i.week || [];
+  if (!week.length) return "";
+  const top = Math.max(1, ...week.map((d) => d.count));
+  const label = (day) =>
+    new Date(day + "T00:00:00").toLocaleDateString("ru-RU", {
+      day: "numeric",
+      month: "short",
+    });
+  return `<div class="week-chart"><h3>Отправлено за 7 дней</h3><ul>${week.map((d) => `<li><span class="week-value">${num(d.count)}</span><span class="week-bar"><i style="height:${Math.round((d.count / top) * 100)}%"></i></span><span class="week-day">${label(d.day)}</span></li>`).join("")}</ul></div>`;
+}
 function instanceDetail(id) {
   const i = data.instances.find((x) => x.id === Number(id));
   if (!i) return;
@@ -459,7 +501,7 @@ function instanceDetail(id) {
     button(label, ic, act, cls, `data-id="${i.id}"`);
   modal(
     esc(i.name),
-    `${badge(instanceStates, i.state)}<dl class="kv"><dt>Телефон</dt><dd>${phoneFmt(i.phone)}</dd><dt>ID подключения</dt><dd>${esc(i.id_instance)}</dd></dl><div class="actions-row">${i.state === "authorized" && i.enabled ? a("Написать сообщение", "message", "manual-message", "primary") : ""}${a("Обновить статус", "refresh", "instance-refresh")}${i.state === "authorized" ? a("Отключить WhatsApp", "logout", "instance-logout", "danger-button") : a("Подключить по QR", "qr", "instance-qr", "primary")}</div>`,
+    `${badge(instanceStates, i.state)}<dl class="kv"><dt>Телефон</dt><dd>${phoneFmt(i.phone)}</dd><dt>ID подключения</dt><dd>${esc(i.id_instance)}</dd></dl><div class="stat-grid"><div><strong>${num(i.sent_today)}</strong><small>сегодня из ${num(i.limit_today)}</small></div><div><strong>${num(i.sent_total)}</strong><small>отправлено всего</small></div><div><strong>${num(i.delivered_total)}</strong><small>доставлено</small></div><div><strong>${num(i.read_total)}</strong><small>прочитано</small></div><div><strong>${num(i.replied_total)}</strong><small>ответили</small></div><div><strong>${num(i.failed_total)}</strong><small>не доставлено</small></div></div>${weekChart(i)}<div class="actions-row">${i.state === "authorized" && i.enabled ? a("Написать сообщение", "message", "manual-message", "primary") : ""}${a("Обновить статус", "refresh", "instance-refresh")}${i.state === "authorized" ? a("Отключить WhatsApp", "logout", "instance-logout", "danger-button") : a("Подключить по QR", "qr", "instance-qr", "primary")}</div>`,
     a("Удалить номер", "trash", "instance-delete", "text danger-button") +
       button("Закрыть", null, "close"),
   );
@@ -928,6 +970,20 @@ document.addEventListener("change", async (e) => {
       importPreviewGeneration++;
       $("#import-result").textContent =
         "Файл выбран. Нажмите «Проверить базу».";
+    }
+    if (t.dataset.toggleNumber) {
+      const on = t.checked;
+      t.disabled = true;
+      try {
+        await api(`/instances/${t.dataset.toggleNumber}`, {
+          method: "PATCH",
+          body: { enabled: on },
+        });
+        toast(on ? "Номер участвует в рассылках" : "Номер выключен из рассылок");
+      } finally {
+        await refresh();
+      }
+      return;
     }
     if (t.id === "c-template" && t.value) {
       const tpl = data.templates.find((x) => x.id === Number(t.value));

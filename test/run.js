@@ -410,7 +410,7 @@ async function uiTests() {
 
     // номера: подключение по QR и подсказка «что дальше»
     await page.click('a[href="#numbers"]');
-    await page.waitForSelector('.connection-table');
+    await page.waitForSelector('.number-grid');
     await page.click('button.campaign-name:has-text("Номер A")');
     await page.waitForSelector('dialog .kv');
     await page.click('dialog [data-act=instance-refresh]');

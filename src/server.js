@@ -139,13 +139,40 @@ const getInstance = async (id) => {
   if (!inst) throw new HttpError(404, 'Номер не найден');
   return inst;
 };
-async function instanceView(inst, today = dayInTz()) {
+// Статистика отправок по номерам: всего за всё время и по дням за последнюю неделю
+const EMPTY_STATS = { sent_total: 0, delivered_total: 0, read_total: 0, failed_total: 0, replied_total: 0 };
+async function instanceStats(onlyId = null) {
+  const where = onlyId ? 'instance_id = ?' : 'instance_id IS NOT NULL';
+  const args = onlyId ? [onlyId] : [];
+  const totals = await db.prepare(`SELECT instance_id,
+      COUNT(*) FILTER (WHERE status IN ('sent', 'delivered', 'read')) AS sent_total,
+      COUNT(*) FILTER (WHERE status IN ('delivered', 'read')) AS delivered_total,
+      COUNT(*) FILTER (WHERE status = 'read') AS read_total,
+      COUNT(*) FILTER (WHERE status IN ('failed', 'no_wa')) AS failed_total,
+      COUNT(*) FILTER (WHERE replied = 1) AS replied_total
+    FROM messages WHERE ${where} GROUP BY instance_id`).all(...args);
+  const days = Array.from({ length: 7 }, (_, k) => dayInTz(Date.now() - (6 - k) * 86400000));
+  const counts = await db.prepare(`SELECT instance_id, day, count FROM daily_counts WHERE day >= ?${onlyId ? ' AND instance_id = ?' : ''}`).all(days[0], ...args);
+  const map = new Map();
+  const slot = (id) => {
+    if (!map.has(id)) map.set(id, { ...EMPTY_STATS, week: days.map((day) => ({ day, count: 0 })) });
+    return map.get(id);
+  };
+  for (const { instance_id, ...t } of totals) Object.assign(slot(instance_id), Object.fromEntries(Object.entries(t).map(([k, v]) => [k, Number(v)])));
+  for (const c of counts) {
+    const d = slot(c.instance_id).week.find((x) => x.day === c.day);
+    if (d) d.count = Number(c.count);
+  }
+  return { get: (id) => slot(id) };
+}
+async function instanceView(inst, today = dayInTz(), stats = null) {
   const { api_token, ...rest } = inst;
   return {
     ...rest,
     token_tail: api_token.slice(-4),
     sent_today: await worker.sentToday(inst.id, today),
-    limit_today: worker.dailyLimit(inst, today)
+    limit_today: worker.dailyLimit(inst, today),
+    ...(stats || await instanceStats(inst.id)).get(inst.id)
   };
 }
 const webhookUrl = () => `${PUBLIC_URL}/webhook/${WEBHOOK_SECRET}`;
@@ -159,7 +186,8 @@ const greenError = (e) => new HttpError(e.status === 401 || e.status === 403 ? 4
 
 app.get('/api/instances', async (req, res) => {
   const today = dayInTz();
-  res.json(await Promise.all((await db.prepare('SELECT * FROM instances ORDER BY id').all()).map((i) => instanceView(i, today))));
+  const stats = await instanceStats();
+  res.json(await Promise.all((await db.prepare('SELECT * FROM instances ORDER BY id').all()).map((i) => instanceView(i, today, stats))));
 });
 
 app.post('/api/instances', wrap(async (req, res) => {
