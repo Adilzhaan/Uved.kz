@@ -11,6 +11,7 @@ const XLSX = require('xlsx');
 const { Pool } = require('pg');
 const { writeXlsx } = require('./gen-xlsx');
 const { renderTemplate, normalizePhone } = require('../src/util');
+const { scrub } = require('../src/monitoring');
 
 const ROOT = path.join(__dirname, '..');
 const PORT = Number(process.env.TEST_PORT || 3999);
@@ -83,6 +84,20 @@ function unitTests() {
   assert.deepStrictEqual([...seen].sort(), ['Добрый вечер, Олег', 'Добрый день, Олег', 'Привет, Олег']);
   assert.strictEqual(renderTemplate('{name}', { name: '{a|b}' }), '{a|b}');
   ok('шаблон: переменные, вложенный спинтакс, пробелы');
+
+  const ev = scrub({
+    timestamp: 1764150000.123,
+    message: 'sendMessage: HTTP 400 — bad chatId 77011234567@c.us',
+    request: { url: 'https://uved.kz/webhook/whsecret123' },
+    breadcrumbs: [{ data: { url: 'https://api.green-api.com/waInstance1101234567/sendMessage/abcDEF123token' } },
+      { data: { url: 'https://api.green-api.com/partner/createInstance/partnerTOKEN42' } }]
+  });
+  assert.strictEqual(ev.timestamp, 1764150000.123, 'числа не трогаем');
+  assert.strictEqual(ev.message, 'sendMessage: HTTP 400 — bad chatId 770*****67@c.us');
+  assert.strictEqual(ev.request.url, 'https://uved.kz/webhook/[secret]');
+  assert.strictEqual(ev.breadcrumbs[0].data.url, 'https://api.green-api.com/waInstance1101234567/sendMessage/[token]');
+  assert.strictEqual(ev.breadcrumbs[1].data.url, 'https://api.green-api.com/partner/createInstance/[token]');
+  ok('мониторинг: токены, секрет вебхука и телефоны вычищаются');
 }
 
 async function apiTests() {

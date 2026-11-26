@@ -15,6 +15,7 @@
     "check": "for f in src/*.js test/*.js dist/app.js; do node --check $f || exit 1; done"
   },
   "dependencies": {
+    "@sentry/node": "^10.78.0",
     "cookie-parser": "^1.4.7",
     "express": "^4.21.2",
     "multer": "^2.0.2",

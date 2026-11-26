@@ -1,4 +1,6 @@
 'use strict';
+// мониторинг первым: Sentry должен обернуть express и pg до их загрузки
+const monitoring = require('./monitoring');
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
@@ -87,6 +89,7 @@ app.post('/webhook/:secret', async (req, res) => {
     await handleWebhook(req.body);
   } catch (e) {
     console.error('webhook', e);
+    monitoring.captureError(e, 'webhook', { typeWebhook: req.body?.typeWebhook, idInstance: req.body?.instanceData?.idInstance });
   }
   res.status(200).json({ ok: true });
 });
@@ -904,6 +907,8 @@ app.use((err, req, res, next) => {
   let message = err.message || 'Внутренняя ошибка';
   if (err.code === 'LIMIT_FILE_SIZE') {status = 400;message = 'Файл слишком большой (максимум 100 МБ)';}
   if (status >= 500) console.error(err);
+  // HttpError — ожидаемые ответы (например, GREEN-API недоступен); в Sentry только настоящие сбои
+  if (status >= 500 && !(err instanceof HttpError)) monitoring.captureError(err, 'api', { method: req.method, path: req.route?.path || req.path });
   res.status(status).json({ error: message });
 });
 
@@ -911,14 +916,20 @@ let server;
 initDb().then(() => {
   server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Pulse WhatsApp: http://localhost:${PORT} (TZ ${TZ})`);
-    worker.start().catch((e) => console.error('worker start', e));
+    worker.start().catch((e) => {console.error('worker start', e);monitoring.captureError(e, 'worker-start');});
   });
-}).catch((e) => { console.error('Database initialization failed', e); process.exit(1); });
+}).catch(async (e) => {
+  console.error('Database initialization failed', e);
+  monitoring.captureError(e, 'db-init');
+  await monitoring.flush();
+  process.exit(1);
+});
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     worker.stop();
-    if (server) server.close(() => { db.close().finally(() => process.exit(0)); });
-    else db.close().finally(() => process.exit(0));
+    const exit = () => db.close().finally(() => monitoring.flush().finally(() => process.exit(0)));
+    if (server) server.close(exit);
+    else exit();
     setTimeout(() => process.exit(0), 3000).unref();
   });
 }
