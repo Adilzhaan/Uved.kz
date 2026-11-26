@@ -15,13 +15,27 @@ const BAD_STATES = new Set(['blocked', 'yellowCard']);
 const runtime = new Map(); // instance.id → { nextAt, busy, errors }
 function rt(id) {
   let s = runtime.get(id);
-  if (!s) runtime.set(id, s = { nextAt: 0, busy: false, errors: 0 });
+  if (!s) runtime.set(id, s = { nextAt: 0, pauseMs: 0, busy: false, errors: 0 });
   return s;
 }
 function resetInstance(id) {
   const s = rt(id);
   s.errors = 0;
   s.nextAt = 0;
+  s.pauseMs = 0;
+}
+/** Перерыв после сообщения. От минуты и больше — целыми минутами: 2–4 мин → 2, 3 или 4 минуты */
+function pickPauseMs(camp) {
+  const lo = Math.max(MIN_DELAY_SEC, camp.delay_min);
+  const hi = Math.max(lo, camp.delay_max);
+  if (lo < 60) return randInt(lo * 1000, hi * 1000);
+  const from = Math.ceil(lo / 60);
+  return randInt(from, Math.max(from, Math.floor(hi / 60))) * 60000;
+}
+/** Когда номер отправит следующее сообщение и какой длины текущий перерыв (для обратного отсчёта) */
+function nextSend(id) {
+  const s = runtime.get(id);
+  return s && s.nextAt > Date.now() ? { next_send_at: s.nextAt, pause_ms: s.pauseMs || 0 } : { next_send_at: null, pause_ms: 0 };
 }
 
 /** Дневной лимит с прогревом: min(max, start + step × дней с первой отправки) */
@@ -104,9 +118,8 @@ async function processMessage(inst, camp, msg) {
       await qFirstDay.run(today, inst.id);
     })();
     s.errors = 0;
-    const lo = Math.max(MIN_DELAY_SEC, camp.delay_min);
-    const hi = Math.max(lo, camp.delay_max);
-    s.nextAt = now + randInt(lo * 1000, hi * 1000); // случайная пауза после успешной отправки
+    s.pauseMs = pickPauseMs(camp); // случайный перерыв после успешной отправки
+    s.nextAt = now + s.pauseMs;
   } catch (e) {
     const status = e.status;
     const text = String(e.message || e).slice(0, 500);
@@ -119,12 +132,14 @@ async function processMessage(inst, camp, msg) {
     } else if (status === 400) {
       await qFinal.run('failed', text, msg.id);
       s.errors++;
-      s.nextAt = Date.now() + Math.max(MIN_DELAY_SEC, camp.delay_min) * 1000;
+      s.pauseMs = Math.max(MIN_DELAY_SEC, camp.delay_min) * 1000;
+      s.nextAt = Date.now() + s.pauseMs;
     } else {
       // сеть, 429, 5xx — сообщение обратно в очередь, номер отдыхает
       await qRequeue.run(text, msg.id);
       s.errors++;
-      s.nextAt = Date.now() + RETRY_DELAY_SEC * 1000;
+      s.pauseMs = RETRY_DELAY_SEC * 1000;
+      s.nextAt = Date.now() + s.pauseMs;
     }
     if (s.errors >= MAX_ERRORS) await stopInstance(inst.id, `${MAX_ERRORS} ошибок подряд. Последняя: ${text}`);
   }
@@ -211,5 +226,5 @@ function stop() {
 
 module.exports = {
   start, stop, tick, stopInstance, resetInstance, refreshInstance, applyState, pollStates,
-  dailyLimit, sentToday, MIN_DELAY_SEC, BAD_STATES
+  dailyLimit, sentToday, nextSend, pickPauseMs, MIN_DELAY_SEC, BAD_STATES
 };

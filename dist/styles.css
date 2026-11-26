@@ -2747,3 +2747,125 @@ details.advanced[open] summary {
   color: #a6b2c6;
   letter-spacing: 0;
 }
+
+/* ───── Обратный отсчёт до следующего сообщения ───── */
+.countdown {
+  --p: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.countdown-ring {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  background: conic-gradient(var(--blue) calc(var(--p) * 360deg), #e6ecf7 0);
+}
+.countdown-ring::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: white;
+}
+.countdown-time {
+  position: relative;
+  font-size: 14px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  color: var(--dark);
+}
+.countdown-text {
+  min-width: 0;
+}
+.countdown-text strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 650;
+}
+.countdown-caption {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.countdown.is-sending .countdown-ring::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--blue);
+  animation: countdown-pulse 1s ease-in-out infinite;
+}
+@keyframes countdown-pulse {
+  0%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+.countdown-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin: 14px 0 16px;
+}
+.countdown-list .countdown {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfcff;
+}
+.number-card > .countdown {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f5f8fe;
+}
+.number-card > .countdown .countdown-ring::before {
+  background: #f5f8fe;
+}
+.countdown.compact {
+  gap: 8px;
+  margin-top: 7px;
+}
+.countdown.compact .countdown-ring {
+  width: 18px;
+  height: 18px;
+}
+.countdown.compact .countdown-ring::before {
+  inset: 3px;
+}
+.countdown.compact .countdown-time,
+.countdown.compact .countdown-text strong {
+  display: none;
+}
+.countdown.compact .countdown-caption {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.countdown.compact.is-sending .countdown-ring::after {
+  width: 6px;
+  height: 6px;
+}
+.static-value {
+  margin: 0;
+  padding: 10px 0 4px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--dark);
+}
+@media (prefers-reduced-motion: reduce) {
+  .countdown.is-sending .countdown-ring::after {
+    animation: none;
+  }
+}

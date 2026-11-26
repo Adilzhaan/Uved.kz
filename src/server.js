@@ -172,6 +172,8 @@ async function instanceView(inst, today = dayInTz(), stats = null) {
     token_tail: api_token.slice(-4),
     sent_today: await worker.sentToday(inst.id, today),
     limit_today: worker.dailyLimit(inst, today),
+    ...worker.nextSend(inst.id),
+    server_now: Date.now(),
     ...(stats || await instanceStats(inst.id)).get(inst.id)
   };
 }
@@ -560,8 +562,8 @@ async function campaignInput(b, prev) {
     media_name: b.media_name !== undefined ? String(b.media_name || '').trim().slice(0, 200) || null : prev?.media_name ?? null,
     list_id: b.list_id !== undefined ? b.list_id === null || b.list_id === '' ? null : Number(b.list_id) : prev?.list_id ?? null,
     instance_ids: b.instance_ids !== undefined ? b.instance_ids : parseIds(prev?.instance_ids || '[]'),
-    delay_min: int(b.delay_min ?? prev?.delay_min, 25, minDelay, 3600),
-    delay_max: int(b.delay_max ?? prev?.delay_max, 70, minDelay, 7200),
+    delay_min: int(b.delay_min ?? prev?.delay_min, 120, minDelay, 3600),
+    delay_max: int(b.delay_max ?? prev?.delay_max, 240, minDelay, 7200),
     hour_from: int(b.hour_from ?? prev?.hour_from, 10, 0, 23),
     hour_to: int(b.hour_to ?? prev?.hour_to, 20, 1, 24),
     check_wa: (b.check_wa !== undefined ? b.check_wa : prev?.check_wa) ? 1 : 0

@@ -208,7 +208,7 @@ function campaignsPage() {
         ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название</th><th>Статус</th><th>Отправлено</th><th>Ответили</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows
             .map((c) => {
               const st = c.stats;
-              return `<tr><td><button class="campaign-name" data-act="campaign-open" data-id="${c.id}"><span class="mail-tile">${icon("send")}</span><span style="text-align:left"><strong>${esc(c.name)}</strong><small>${esc(listName(c))}</small></span></button></td><td data-label="Статус">${badge(campaignStatuses, c.status)}</td><td data-label="Отправлено">${c.status === "draft" ? '<span class="muted">ещё не запускалась</span>' : `<span class="progress-cell"><strong>${num(st.sent)} из ${num(st.total)}</strong><span class="mini-progress"><span style="width:${donePercent(st)}%"></span></span></span>`}</td><td data-label="Ответили">${st.sent ? num(st.replied) : "—"}</td><td class="connection-actions"><div class="row-actions">${button("Открыть", null, "campaign-open", "compact", `data-id="${c.id}"`)}</div></td></tr>`;
+              return `<tr><td><button class="campaign-name" data-act="campaign-open" data-id="${c.id}"><span class="mail-tile">${icon("send")}</span><span style="text-align:left"><strong>${esc(c.name)}</strong><small>${esc(listName(c))}</small></span></button></td><td data-label="Статус">${badge(campaignStatuses, c.status)}${campaignNext(c)}</td><td data-label="Отправлено">${c.status === "draft" ? '<span class="muted">ещё не запускалась</span>' : `<span class="progress-cell"><strong>${num(st.sent)} из ${num(st.total)}</strong><span class="mini-progress"><span style="width:${donePercent(st)}%"></span></span></span>`}</td><td data-label="Ответили">${st.sent ? num(st.replied) : "—"}</td><td class="connection-actions"><div class="row-actions">${button("Открыть", null, "campaign-open", "compact", `data-id="${c.id}"`)}</div></td></tr>`;
             })
             .join("")}</tbody></table></div>`
         : empty(
@@ -229,8 +229,8 @@ function campaignForm(existing = null, copy = false, preset = null) {
       ? ready
       : data.instances.filter((i) => i.enabled)
     ).map((i) => i.id),
-    delay_min: 25,
-    delay_max: 70,
+    delay_min: 120,
+    delay_max: 240,
     hour_from: 10,
     hour_to: 20,
     check_wa: 0,
@@ -257,7 +257,7 @@ function campaignForm(existing = null, copy = false, preset = null) {
 <details class="advanced"><summary>Дополнительные настройки</summary>
 <div class="field"><label for="c-name">Название рассылки</label><input id="c-name" name="name" value="${esc(c.name)}" maxlength="120" required/></div>
 <div class="field"><label>С каких номеров отправлять</label><div class="checks">${data.instances.map((i) => `<label class="check"><input type="checkbox" name="instance" value="${i.id}" ${c.instance_ids.includes(i.id) ? "checked" : ""}/>${esc(i.name)} <span class="muted">· до ${num(i.limit_today)} в день${i.state === "authorized" ? "" : " · не подключён"}</span></label>`).join("")}</div></div>
-<div class="form-grid"><div class="field"><label for="c-dmin">Пауза между сообщениями, сек</label><div class="form-grid"><input id="c-dmin" name="delay_min" type="number" min="${minDelay}" max="3600" value="${c.delay_min}" required aria-label="Пауза от"/><input name="delay_max" type="number" min="${minDelay}" max="7200" value="${c.delay_max}" required aria-label="Пауза до"/></div><small>Случайная, от и до.</small></div>
+<div class="form-grid"><div class="field"><label>Перерыв между сообщениями</label><input type="hidden" name="delay_min" value="120"/><input type="hidden" name="delay_max" value="240"/><p class="static-value">2, 3 или 4 минуты</p><small>Выбирается случайно после каждого сообщения — так номер меньше рискует попасть под блокировку.</small></div>
 <div class="field"><label for="c-hfrom">Часы отправки</label><div class="form-grid"><input id="c-hfrom" name="hour_from" type="number" min="0" max="23" value="${c.hour_from}" required aria-label="Час с"/><input name="hour_to" type="number" min="1" max="24" value="${c.hour_to}" required aria-label="Час до"/></div><small>Время ${esc(tz)}.</small></div></div>
 <div class="field" style="margin-top:17px"><label class="check"><input type="checkbox" name="check_wa" ${c.check_wa ? "checked" : ""}/>Сначала проверять, есть ли у номера WhatsApp</label></div>
 ${status === "draft" ? `<div class="field"><label for="c-exclude">Не писать тем, кому уже писали за последние N дней</label><input id="c-exclude" name="exclude_recent_days" type="number" min="0" max="3650" value="${Number(c.exclude_recent_days) || 0}"/><small>0 — писать всем из базы.</small></div>` : ""}
@@ -288,6 +288,70 @@ function readCampaignForm() {
     check_wa: f.get("check_wa") ? 1 : 0,
     exclude_recent_days: Number(f.get("exclude_recent_days")) || 0,
   };
+}
+// ───── Обратный отсчёт до следующего сообщения ─────
+let clockSkew = 0; // часы сервера минус часы браузера, мс
+const mmss = (ms) => {
+  const sec = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+};
+// Кольцо с таймером; цифры и заполнение обновляет tickCountdowns раз в секунду
+function countdown(i, label) {
+  if (!i.next_send_at) return "";
+  return `<div class="countdown" data-next-at="${i.next_send_at}" data-pause="${i.pause_ms || 0}"><span class="countdown-ring" aria-hidden="true"><span class="countdown-time"></span></span><span class="countdown-text"><strong>${label}</strong><small class="countdown-caption"></small></span></div>`;
+}
+let countdownRefresh = 0;
+function tickCountdowns() {
+  const now = Date.now() + clockSkew;
+  let due = false;
+  for (const el of document.querySelectorAll(".countdown")) {
+    const left = Number(el.dataset.nextAt) - now;
+    const pause = Number(el.dataset.pause) || 0;
+    const done = left <= 0;
+    el.classList.toggle("is-sending", done);
+    el.style.setProperty(
+      "--p",
+      done || !pause ? 1 : Math.min(1, Math.max(0, 1 - left / pause)),
+    );
+    el.querySelector(".countdown-time").textContent = done ? "" : mmss(left);
+    el.querySelector(".countdown-caption").textContent = done
+      ? "Отправляем сообщение…"
+      : el.classList.contains("compact")
+        ? `Следующее сообщение через ${mmss(left)}`
+        : "до следующего сообщения";
+    if (done) due = true;
+  }
+  // перерыв закончился — подтянем свежие данные, не дожидаясь автообновления
+  if (due && !refreshing && Date.now() - countdownRefresh > 4000) {
+    countdownRefresh = Date.now();
+    refresh();
+  }
+}
+setInterval(tickCountdowns, 1000);
+// Номера рассылки, которые сейчас выдерживают перерыв
+function waitingNumbers(c) {
+  if (c.status !== "running" || !c.stats.queue) return [];
+  return data.instances.filter(
+    (i) =>
+      c.instance_ids.includes(i.id) &&
+      isReady(i) &&
+      i.next_send_at &&
+      i.sent_today < i.limit_today,
+  );
+}
+// Компактный отсчёт для списка рассылок: ближайшая отправка
+function campaignNext(c) {
+  const soonest = waitingNumbers(c).sort(
+    (a, b) => a.next_send_at - b.next_send_at,
+  )[0];
+  return soonest
+    ? countdown(soonest, "").replace('class="countdown"', 'class="countdown compact"')
+    : "";
+}
+function campaignCountdowns(c) {
+  const waiting = waitingNumbers(c);
+  if (!waiting.length) return "";
+  return `<div class="countdown-list">${waiting.map((i) => countdown(i, esc(i.name))).join("")}</div>`;
 }
 // Понятное объяснение, почему рассылка сейчас не отправляет
 function campaignHint(c) {
@@ -372,7 +436,7 @@ function campaignDetail(id) {
     `${badge(campaignStatuses, c.status)} <span class="muted">${esc(listName(c))}</span>${
       c.status === "draft"
         ? `<div class="info-box">Это черновик — сообщения ещё не отправлялись.</div>`
-        : `<div class="stat-grid">${cells.map(([v, l]) => `<div><strong>${num(v)}</strong><small>${l}</small></div>`).join("")}</div><div class="big-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${donePercent(st)}" aria-label="Обработано"><span style="width:${donePercent(st)}%"></span></div><div class="progress-caption"><span>Обработано ${donePercent(st)}%</span><span>${extra}</span></div>${hint ? `<div class="info-box">${hint}</div>` : ""}`
+        : `<div class="stat-grid">${cells.map(([v, l]) => `<div><strong>${num(v)}</strong><small>${l}</small></div>`).join("")}</div><div class="big-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${donePercent(st)}" aria-label="Обработано"><span style="width:${donePercent(st)}%"></span></div><div class="progress-caption"><span>Обработано ${donePercent(st)}%</span><span>${extra}</span></div>${hint ? `<div class="info-box">${hint}</div>` : ""}${campaignCountdowns(c)}`
     }<div class="preview-email">${esc(c.text) || '<span class="muted">Без текста</span>'}</div>${c.status === "draft" ? "" : `<div class="actions-row" style="margin-top:16px"><a class="button compact" href="/api/campaigns/${c.id}/export.csv" download>${icon("download")}Скачать отчёт (CSV)</a></div>`}`,
     footer,
   );
@@ -419,7 +483,7 @@ function numberCard(i) {
 <header><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span class="mail-tile">${icon("phone")}</span><span><strong>${esc(i.name)}</strong><small>${i.phone ? phoneFmt(i.phone) : "Ждёт подключения"}</small></span></button>${badge(instanceStates, i.state)}</header>
 <div class="number-today"><div class="progress-caption"><span>Сегодня отправлено</span><strong>${num(i.sent_today)} из ${num(i.limit_today)}</strong></div><div class="big-progress"><span style="width:${share(i.sent_today, i.limit_today)}%"></span></div></div>
 <dl class="number-stats"><div><dt>Отправлено</dt><dd>${num(i.sent_total)}</dd></div><div><dt>Доставлено</dt><dd>${num(i.delivered_total)}</dd></div><div><dt>Прочитано</dt><dd>${num(i.read_total)}</dd></div><div><dt>Ответили</dt><dd>${num(i.replied_total)}</dd></div></dl>
-${note ? `<p class="number-note">${note}</p>` : ""}
+${note ? `<p class="number-note">${note}</p>` : ""}${on && i.enabled ? countdown(i, "Перерыв между сообщениями") : ""}
 <div class="number-foot">${on ? `<label class="switch"><input type="checkbox" data-toggle-number="${i.id}" ${i.enabled ? "checked" : ""}/><span class="switch-track"></span><span>${i.enabled ? "Участвует в рассылках" : "Не участвует в рассылках"}</span></label>` : a("Подключить по QR", "qr", "instance-qr", "primary compact")}<div class="row-actions">${on && i.enabled ? a("Написать", "message", "manual-message", "compact") : ""}${a("Подробнее", null, "instance-open", "compact")}</div></div>
 </article>`;
 }
@@ -626,10 +690,14 @@ function render() {
   $("#main").innerHTML = loaded
     ? pages[page]()
     : '<div class="empty">Загрузка…</div>';
+  tickCountdowns();
 }
 async function load() {
   const jobs = [
-    api("/instances").then((r) => (data.instances = r)),
+    api("/instances").then((r) => {
+      data.instances = r;
+      if (r[0]?.server_now) clockSkew = r[0].server_now - Date.now();
+    }),
     api("/overview").then((r) => (data.overview = r)),
   ];
   if (page === "base" || page === "campaigns")
@@ -739,6 +807,7 @@ function modal(title, body, footer = "") {
   $("#dialog-content").innerHTML =
     `<div class="dialog-header"><h2>${title}</h2><button class="icon-button" data-act="close" aria-label="Закрыть">${icon("close")}</button></div><div class="dialog-body">${body}</div>${footer ? `<div class="dialog-footer">${footer}</div>` : ""}`;
   if (!dialog.open) dialog.showModal();
+  tickCountdowns();
 }
 function closeDialog() {
   dialogState = null;
