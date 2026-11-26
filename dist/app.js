@@ -8,6 +8,7 @@ const paths = {
   checkCircle: "M22 11.1V12a10 10 0 1 1-5.9-9.14 M22 4 12 14l-3-3",
   eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0",
   chevrons: "m9 8 3-3 3 3 m-6 8 3 3 3-3",
+  chevronLeft: "m15 18-6-6 6-6",
   left: "m14 6-6 6 6 6",
   right: "m10 6 6 6-6 6",
   zap: "m13 2-9 12h7l-1 8 10-12h-7l1-8Z",
@@ -93,6 +94,7 @@ const navigation = [
   ["campaigns", "send", "Рассылки"],
   ["numbers", "phone", "WhatsApp-номера"],
   ["base", "database", "База для рассылки"],
+  ["chats", "message", "Чаты"],
   ["templates", "copy", "Шаблоны"],
 ];
 const data = {
@@ -702,7 +704,50 @@ function importDialog() {
   );
 }
 
+/* ───────── Чаты ───────── */
+let chatOpen = null; // телефон открытой переписки
+let chatDraft = ""; // недописанный ответ переживает автообновление
+const initials = (name, phone) =>
+  (String(name || "").trim()[0] || String(phone).slice(-2)).toUpperCase();
+function chatsPage() {
+  const rows = data.chats || [];
+  const t = chatOpen ? data.thread : null;
+  const list = rows.length
+    ? rows
+        .map(
+          (c) =>
+            `<button type="button" class="chat-row${c.phone === chatOpen ? " active" : ""}" data-act="chat-open" data-phone="${esc(c.phone)}"><span class="avatar">${esc(initials(c.name, c.phone))}</span><span class="chat-row-main"><span class="chat-row-top"><strong>${esc(c.name) || phoneFmt(c.phone)}</strong><time>${dateTime(c.last_at)}</time></span><span class="chat-row-text">${c.opted_out ? '<span class="chat-flag">Отписался</span> ' : ""}${esc(c.text) || "Вложение"}</span></span>${c.unread && c.phone !== chatOpen ? `<b class="nav-badge">${num(c.unread)}</b>` : ""}</button>`,
+        )
+        .join("")
+    : `<div class="empty">${icon("message")}Ответов пока нет<p>Когда получатели ответят на рассылку, переписка появится здесь.</p></div>`;
+  const ready = data.instances.filter(isReady);
+  const thread = !chatOpen
+    ? `<div class="empty chat-placeholder">${icon("message")}Выберите чат слева</div>`
+    : !t || t.phone !== chatOpen
+      ? '<div class="empty">Загрузка…</div>'
+      : `<header class="chat-head"><button type="button" class="icon-button chat-back" data-act="chat-back" aria-label="Назад к списку">${icon("chevronLeft")}</button><span class="avatar">${esc(initials(t.name, t.phone))}</span><span><strong>${esc(t.name) || phoneFmt(t.phone)}</strong><small>${phoneFmt(t.phone)}</small></span></header><div class="chat-messages" id="chat-messages">${t.items.map((m) => `<div class="bubble ${m.dir}"><p>${esc(m.text) || "<i>Вложение</i>"}</p><small>${m.campaign ? "Рассылка · " : ""}${dateTime(m.at)}</small></div>`).join("")}</div>${
+          t.opted_out
+            ? `<p class="number-note chat-closed">Этот человек отписался — писать ему нельзя.</p>`
+            : ready.length
+              ? `<form id="chat-form" class="chat-form" data-phone="${esc(t.phone)}"><textarea id="chat-text" name="text" rows="2" maxlength="4000" placeholder="Напишите ответ" aria-label="Ответ" required>${esc(chatDraft)}</textarea><button type="submit" class="button primary">${icon("send")}Отправить</button></form>`
+              : `<p class="number-note chat-closed">Чтобы ответить, подключите номер WhatsApp.</p>`
+        }`;
+  return (
+    heading("Чаты", "") +
+    `<section class="panel chats${chatOpen ? " has-open" : ""}"><div class="chat-list">${list}</div><div class="chat-thread">${thread}</div></section>`
+  );
+}
+async function openChat(phone) {
+  if (phone !== chatOpen) chatDraft = "";
+  chatOpen = phone;
+  data.thread = null;
+  render();
+  await refresh();
+  const box = $("#chat-messages");
+  if (box) box.scrollTop = box.scrollHeight;
+}
 const pages = {
+  chats: chatsPage,
   campaigns: campaignsPage,
   numbers: numbersPage,
   base: basePage,
@@ -713,7 +758,7 @@ function renderChrome() {
   $("#navigation").innerHTML = navigation
     .map(
       ([id, ic, label]) =>
-        `<a href="#${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span></a>`,
+        `<a href="#${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${id === "chats" && data.overview?.chats_unread ? `<b class="nav-badge" aria-label="Непрочитанных чатов: ${data.overview.chats_unread}">${num(data.overview.chats_unread)}</b>` : ""}</a>`,
     )
     .join("");
   $("#breadcrumb-page").textContent = nav[2];
@@ -721,9 +766,26 @@ function renderChrome() {
 }
 function render() {
   renderChrome();
+  // автообновление не должно сбивать набор ответа и прокрутку переписки
+  const active = document.activeElement;
+  const keep =
+    active?.id === "chat-text"
+      ? [active.selectionStart, active.selectionEnd]
+      : null;
+  const oldBox = $("#chat-messages");
+  const atBottom =
+    !oldBox ||
+    oldBox.scrollHeight - oldBox.scrollTop - oldBox.clientHeight < 40;
+  const oldTop = oldBox?.scrollTop;
   $("#main").innerHTML = loaded
     ? pages[page]()
     : '<div class="empty">Загрузка…</div>';
+  const box = $("#chat-messages");
+  if (box) box.scrollTop = atBottom ? box.scrollHeight : oldTop;
+  if (keep && $("#chat-text")) {
+    $("#chat-text").focus();
+    $("#chat-text").setSelectionRange(keep[0], keep[1]);
+  }
   renderDock();
   tickCountdowns();
 }
@@ -736,6 +798,8 @@ function renderDock() {
     dock.setAttribute("aria-label", "Идущие рассылки");
     document.body.append(dock);
   }
+  // в чатах плашка уезжает наверх, чтобы не закрывать поле ответа
+  dock.classList.toggle("top", page === "chats");
   const running = loaded
     ? (data.campaigns || []).filter((c) => c.status === "running")
     : [];
@@ -758,6 +822,15 @@ async function load() {
   if (page === "base" || page === "campaigns")
     jobs.push(api("/lists").then((r) => (data.lists = r)));
   jobs.push(api("/campaigns").then((r) => (data.campaigns = r)));
+  if (page === "chats") {
+    jobs.push(api("/chats").then((r) => (data.chats = r)));
+    if (chatOpen)
+      jobs.push(
+        api(`/chats/${chatOpen}`).then((r) => {
+          if (r.phone === chatOpen) data.thread = r;
+        }),
+      );
+  }
   if (page === "templates")
     jobs.push(api("/templates").then((r) => (data.templates = r)));
   await Promise.all(jobs);
@@ -1064,6 +1137,12 @@ const actions = {
     el.closest(".variant").remove();
     renumberVariants();
   },
+  "chat-open": (el) => openChat(el.dataset.phone),
+  "chat-back": () => {
+    chatOpen = null;
+    data.thread = null;
+    render();
+  },
   "instance-qr": (el) => qrDialog(el.dataset.id),
   "instance-code": (el) => codeDialog(el.dataset.id),
   "add-mode": (el) => addConnectionDialog(el.dataset.mode),
@@ -1288,6 +1367,17 @@ const submitters = {
     );
     await refresh();
   },
+  "chat-form": async (form) => {
+    const text = new FormData(form).get("text");
+    const r = await post(`/chats/${form.dataset.phone}/send`, { text });
+    chatDraft = "";
+    if ($("#chat-text")) $("#chat-text").value = "";
+    toast(`Отправлено с номера «${r.instance_name}»`);
+    await refresh();
+    const box = $("#chat-messages");
+    if (box) box.scrollTop = box.scrollHeight;
+    $("#chat-text")?.focus();
+  },
   "template-form": async (form) => {
     const id = form.dataset.id;
     const body = Object.fromEntries(new FormData(form));
@@ -1371,6 +1461,15 @@ const submitters = {
   },
 };
 
+document.addEventListener("input", (e) => {
+  if (e.target.id === "chat-text") chatDraft = e.target.value;
+});
+// в чате Enter отправляет ответ, Shift+Enter — новая строка
+document.addEventListener("keydown", (e) => {
+  if (e.target.id !== "chat-text" || e.key !== "Enter" || e.shiftKey || e.isComposing) return;
+  e.preventDefault();
+  if (e.target.value.trim()) e.target.form.requestSubmit();
+});
 document.addEventListener("submit", (e) => {
   const fn = submitters[e.target.id];
   if (!fn) return;

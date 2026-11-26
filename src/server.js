@@ -335,6 +335,7 @@ app.post('/api/instances/:id/test', wrap(async (req, res) => {
   throw bad('Получатель отписался от сообщений');
   let r;
   try {r = await client(inst).sendMessage(phone, text);} catch (e) {throw greenError(e);}
+  await db.prepare('INSERT INTO outbox(instance_id, phone, text, created_at) VALUES (?, ?, ?, ?)').run(inst.id, phone, text, Date.now());
   await logEvent(`Тестовая отправка с «${inst.name}» на ${phone}`, 'info', inst.id);
   res.json({ ok: true, idMessage: r?.idMessage });
 }));
@@ -768,6 +769,58 @@ app.post('/api/media', mediaUpload.single('file'), (req, res) => {
 });
 
 // ───────── Ответы и стоп-лист ─────────
+// ───────── Чаты: переписка с теми, кто ответил ─────────
+app.get('/api/chats', async (req, res) => {
+  res.json(await db.prepare(`SELECT last.phone, last.text, last.created_at AS last_at, last.is_stop, last.instance_id,
+      agg.unread, agg.total, COALESCE(NULLIF(c.name, ''), last.name, '') AS name, COALESCE(c.opted_out, 0) AS opted_out
+    FROM (SELECT DISTINCT ON (phone) phone, text, created_at, is_stop, instance_id, name FROM incoming ORDER BY phone, id DESC) last
+    JOIN (SELECT phone, COUNT(*) FILTER (WHERE seen = 0) AS unread, COUNT(*) AS total FROM incoming GROUP BY phone) agg ON agg.phone = last.phone
+    LEFT JOIN contacts c ON c.phone = last.phone
+    ORDER BY last.created_at DESC LIMIT 300`).all());
+});
+
+app.get('/api/chats/:phone', async (req, res) => {
+  const phone = normalizePhone(req.params.phone);
+  if (!phone) throw bad('Некорректный номер телефона');
+  const [inc, sent, manual, contact] = await Promise.all([
+  db.prepare('SELECT text, created_at AS at, is_stop, instance_id, name FROM incoming WHERE phone = ? ORDER BY id DESC LIMIT 200').all(phone),
+  db.prepare("SELECT text, sent_at AS at, status, instance_id FROM messages WHERE phone = ? AND sent_at IS NOT NULL ORDER BY sent_at DESC LIMIT 200").all(phone),
+  db.prepare('SELECT text, created_at AS at, instance_id FROM outbox WHERE phone = ? ORDER BY id DESC LIMIT 200').all(phone),
+  db.prepare('SELECT name, opted_out FROM contacts WHERE phone = ?').get(phone)]
+  );
+  await db.prepare('UPDATE incoming SET seen = 1 WHERE phone = ? AND seen = 0').run(phone);
+  const items = [
+  ...inc.map((m) => ({ dir: 'in', text: m.text || '', at: m.at, is_stop: m.is_stop })),
+  ...sent.map((m) => ({ dir: 'out', text: m.text || '', at: m.at, status: m.status, campaign: true })),
+  ...manual.map((m) => ({ dir: 'out', text: m.text, at: m.at }))].
+  sort((a, b) => a.at - b.at).slice(-300);
+  res.json({
+    phone,
+    name: contact?.name || inc[0]?.name || '',
+    opted_out: contact?.opted_out ? 1 : 0,
+    instance_id: inc[0]?.instance_id ?? sent[0]?.instance_id ?? manual[0]?.instance_id ?? null,
+    items
+  });
+});
+
+app.post('/api/chats/:phone/send', wrap(async (req, res) => {
+  const phone = normalizePhone(req.params.phone);
+  const text = String(req.body?.text || '').trim();
+  if (!phone) throw bad('Некорректный номер телефона');
+  if (!text) throw bad('Введите текст сообщения');
+  if (text.length > 4000) throw bad('Сообщение не должно быть длиннее 4000 символов');
+  if (await db.prepare('SELECT 1 FROM contacts WHERE phone = ? AND opted_out = 1').get(phone)) throw bad('Этот человек отписался — писать ему нельзя');
+  // отвечаем с того же номера, на который человек написал; если он отключён — с любого рабочего
+  const ready = await db.prepare("SELECT * FROM instances WHERE enabled = 1 AND state = 'authorized' ORDER BY id").all();
+  const last = await db.prepare('SELECT instance_id FROM incoming WHERE phone = ? AND instance_id IS NOT NULL ORDER BY id DESC LIMIT 1').get(phone);
+  const wanted = Number(req.body?.instance_id) || last?.instance_id;
+  const inst = ready.find((i) => i.id === wanted) || ready[0];
+  if (!inst) throw bad('Нет подключённого номера WhatsApp, с которого можно ответить');
+  try {await client(inst).sendMessage(phone, text);} catch (e) {throw greenError(e);}
+  await db.prepare('INSERT INTO outbox(instance_id, phone, text, created_at) VALUES (?, ?, ?, ?)').run(inst.id, phone, text, Date.now());
+  res.json({ ok: true, instance_id: inst.id, instance_name: inst.name });
+}));
+
 app.get('/api/incoming', async (req, res) => {
   const limit = int(req.query.limit, 50, 1, 500);
   const offset = int(req.query.offset, 0, 0, 1e9);
@@ -835,6 +888,7 @@ app.get('/api/overview', async (req, res) => {
     queue: (await db.prepare(`SELECT COUNT(*) n FROM messages m JOIN campaigns c ON c.id = m.campaign_id
       WHERE c.status IN ('running', 'paused') AND m.status IN ('pending', 'sending')`).get()).n,
     incoming: (await db.prepare('SELECT COUNT(*) n FROM incoming').get()).n,
+    chats_unread: (await db.prepare('SELECT COUNT(DISTINCT phone) n FROM incoming WHERE seen = 0').get()).n,
     campaigns_started: (await db.prepare("SELECT COUNT(*) n FROM campaigns WHERE status <> 'draft'").get()).n
   });
 });
