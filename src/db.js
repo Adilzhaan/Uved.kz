@@ -126,6 +126,8 @@ CREATE TABLE IF NOT EXISTS templates (
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 `);
+  // дополнительные варианты текста рассылки: каждому получателю уходит один из вариантов
+  await query("ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS extra_texts TEXT NOT NULL DEFAULT '[]'");
   await query('INSERT INTO settings(key, value) VALUES (?, ?) ON CONFLICT DO NOTHING',
     ['stop_words', 'стоп, stop, отписка, отписаться, отпишите, не пишите, unsubscribe']);
   await db.transaction(async () => {

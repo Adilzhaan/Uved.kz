@@ -219,11 +219,41 @@ function campaignsPage() {
     }</section><p class="page-note">${icon("shield")}Система сама делает паузы между сообщениями, соблюдает дневные лимиты и не пишет тем, кто ответил «СТОП».</p>`
   );
 }
+// Перерыв между сообщениями в минутах: «от» и «до», выбирается случайно в этих границах
+const paceMinutes = (c) => {
+  const from = Math.min(15, Math.max(1, Math.round((c.delay_min || 120) / 60)));
+  return [from, Math.min(15, Math.max(from, Math.round((c.delay_max || 240) / 60)))];
+};
+function paceSelects(c, prefix) {
+  const [from, to] = paceMinutes(c);
+  const opts = (sel) =>
+    Array.from({ length: 15 }, (_, k) => k + 1)
+      .map((m) => `<option value="${m}" ${m === sel ? "selected" : ""}>${m} мин</option>`)
+      .join("");
+  return `<div class="pace-row"><span>от</span><select id="${prefix}-from" name="pace_from" aria-label="Перерыв от, минут">${opts(from)}</select><span>до</span><select id="${prefix}-to" name="pace_to" aria-label="Перерыв до, минут">${opts(to)}</select></div>`;
+}
+const paceBody = (from, to) => {
+  const a = Math.max(1, Number(from) || 2);
+  return { delay_min: a * 60, delay_max: Math.max(a, Number(to) || a) * 60 };
+};
+// Один дополнительный вариант текста в форме рассылки
+function variantBlock(text = "") {
+  return `<div class="variant"><div class="variant-head"><strong class="variant-title"></strong><button type="button" class="chip" data-act="variant-remove">Убрать</button></div>${data.templates.length ? `<select class="variant-template" aria-label="Вставить готовый шаблон"><option value="">Вставить готовый шаблон…</option>${data.templates.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>` : ""}<textarea name="variant" maxlength="4000" placeholder="Другой текст с тем же смыслом" aria-label="Текст варианта">${esc(text)}</textarea></div>`;
+}
+function renumberVariants() {
+  const list = [...document.querySelectorAll("#c-variants .variant")];
+  list.forEach((el, k) => {
+    el.querySelector(".variant-title").textContent = `Вариант ${k + 2}`;
+  });
+  const add = $("#variant-add");
+  if (add) add.hidden = list.length >= 9;
+}
 function campaignForm(existing = null, copy = false, preset = null) {
   const ready = data.instances.filter(isReady);
   const c = {
     name: `Рассылка ${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: tz }).format(new Date())}`,
     text: "",
+    extra_texts: [],
     list_id: data.lists[0]?.id ?? null,
     instance_ids: (ready.length
       ? ready
@@ -252,12 +282,13 @@ function campaignForm(existing = null, copy = false, preset = null) {
 <div class="field"><label for="c-text">2. Что пишем</label>${data.templates.length ? `<select id="c-template" aria-label="Вставить готовый шаблон"><option value="">Вставить готовый шаблон…</option>${data.templates.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select>` : ""}<textarea id="c-text" name="text" maxlength="4000" placeholder="{Здравствуйте|Добрый день}, {name}!">${esc(c.text)}</textarea>
 <div class="hint-row"><button type="button" class="chip" data-act="insert" data-text="{name}">+ имя</button><button type="button" class="chip" data-act="insert" data-text="{Здравствуйте|Добрый день|Приветствуем}">+ варианты {a|b|c}</button><button type="button" class="chip" data-act="insert" data-text="\n\nОтветьте СТОП, чтобы отписаться.">+ «Ответьте СТОП, чтобы отписаться»</button><button type="button" class="chip" data-act="template-save">Сохранить как шаблон</button></div>
 <small>{name} подставит имя получателя, {город} — любую колонку вашей таблицы. Варианты в фигурных скобках через «|» чередуются случайно: сообщения не выглядят одинаковыми, и номер живёт дольше. Текст в [квадратных скобках] замените своим.</small></div>
+<div class="field"><label>Другие варианты текста (необязательно)</label><div id="c-variants">${(c.extra_texts || []).map(variantBlock).join("")}</div><div class="actions-row"><button type="button" class="button" id="variant-add" data-act="variant-add">${icon("plus")}Добавить ещё вариант текста</button></div><small>Если вариантов несколько, каждому получателю уйдёт один из них — случайно. Так сообщения сильнее отличаются друг от друга.</small></div>
 <div class="field"><label for="c-media">Картинка или файл (необязательно)</label><input type="file" id="c-media" aria-describedby="c-media-info"/><input type="hidden" name="media_url" value="${esc(c.media_url || "")}"/><input type="hidden" name="media_name" value="${esc(c.media_name || "")}"/><small id="c-media-info">${c.media_url ? `Прикреплён: ${esc(c.media_name || c.media_url)} · <button type="button" class="chip" data-act="media-clear">убрать</button>` : "Текст сообщения станет подписью к файлу."}</small></div>
 <div class="actions-row">${button("Посмотреть, как это увидят получатели", "eye", "preview")}</div><div id="preview" class="preview-list" aria-live="polite"></div>
 <details class="advanced"><summary>Дополнительные настройки</summary>
 <div class="field"><label for="c-name">Название рассылки</label><input id="c-name" name="name" value="${esc(c.name)}" maxlength="120" required/></div>
 <div class="field"><label>С каких номеров отправлять</label><div class="checks">${data.instances.map((i) => `<label class="check"><input type="checkbox" name="instance" value="${i.id}" ${c.instance_ids.includes(i.id) ? "checked" : ""}/>${esc(i.name)} <span class="muted">· до ${num(i.limit_today)} в день${i.state === "authorized" ? "" : " · не подключён"}</span></label>`).join("")}</div></div>
-<div class="form-grid"><div class="field"><label>Перерыв между сообщениями</label><input type="hidden" name="delay_min" value="120"/><input type="hidden" name="delay_max" value="240"/><p class="static-value">2, 3 или 4 минуты</p><small>Выбирается случайно после каждого сообщения — так номер меньше рискует попасть под блокировку.</small></div>
+<div class="form-grid"><div class="field"><label>Перерыв между сообщениями</label>${paceSelects(c, "c-pace")}<small>Выбирается случайно в этих границах после каждого сообщения. Менять можно и во время рассылки.</small></div>
 <div class="field"><label for="c-hfrom">Часы отправки</label><div class="form-grid"><input id="c-hfrom" name="hour_from" type="number" min="0" max="23" value="${c.hour_from}" required aria-label="Час с"/><input name="hour_to" type="number" min="1" max="24" value="${c.hour_to}" required aria-label="Час до"/></div><small>Время ${esc(tz)}.</small></div></div>
 <div class="field" style="margin-top:17px"><label class="check"><input type="checkbox" name="check_wa" ${c.check_wa ? "checked" : ""}/>Сначала проверять, есть ли у номера WhatsApp</label></div>
 ${status === "draft" ? `<div class="field"><label for="c-exclude">Не писать тем, кому уже писали за последние N дней</label><input id="c-exclude" name="exclude_recent_days" type="number" min="0" max="3650" value="${Number(c.exclude_recent_days) || 0}"/><small>0 — писать всем из базы.</small></div>` : ""}
@@ -268,6 +299,7 @@ ${status === "draft" ? `<div class="field"><label for="c-exclude">Не писа�
       : button("Отмена", null, "close") +
           `<button type="submit" form="campaign-form" name="mode" value="draft" class="button primary">${icon("check")}Сохранить</button>`,
   );
+  renumberVariants();
 }
 function readCampaignForm() {
   const form = $("#campaign-form");
@@ -281,8 +313,11 @@ function readCampaignForm() {
       ? Number(form.elements.list_id.value)
       : null,
     instance_ids: f.getAll("instance").map(Number),
-    delay_min: Number(f.get("delay_min")),
-    delay_max: Number(f.get("delay_max")),
+    extra_texts: f
+      .getAll("variant")
+      .map(String)
+      .filter((t) => t.trim()),
+    ...paceBody(f.get("pace_from"), f.get("pace_to")),
     hour_from: Number(f.get("hour_from")),
     hour_to: Number(f.get("hour_to")),
     check_wa: f.get("check_wa") ? 1 : 0,
@@ -436,8 +471,8 @@ function campaignDetail(id) {
     `${badge(campaignStatuses, c.status)} <span class="muted">${esc(listName(c))}</span>${
       c.status === "draft"
         ? `<div class="info-box">Это черновик — сообщения ещё не отправлялись.</div>`
-        : `<div class="stat-grid">${cells.map(([v, l]) => `<div><strong>${num(v)}</strong><small>${l}</small></div>`).join("")}</div><div class="big-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${donePercent(st)}" aria-label="Обработано"><span style="width:${donePercent(st)}%"></span></div><div class="progress-caption"><span>Обработано ${donePercent(st)}%</span><span>${extra}</span></div>${hint ? `<div class="info-box">${hint}</div>` : ""}${campaignCountdowns(c)}`
-    }<div class="preview-email">${esc(c.text) || '<span class="muted">Без текста</span>'}</div>${c.status === "draft" ? "" : `<div class="actions-row" style="margin-top:16px"><a class="button compact" href="/api/campaigns/${c.id}/export.csv" download>${icon("download")}Скачать отчёт (CSV)</a></div>`}`,
+        : `<div class="stat-grid">${cells.map(([v, l]) => `<div><strong>${num(v)}</strong><small>${l}</small></div>`).join("")}</div><div class="big-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${donePercent(st)}" aria-label="Обработано"><span style="width:${donePercent(st)}%"></span></div><div class="progress-caption"><span>Обработано ${donePercent(st)}%</span><span>${extra}</span></div>${hint ? `<div class="info-box">${hint}</div>` : ""}${campaignCountdowns(c)}${["running", "paused"].includes(c.status) ? `<form id="pace-form" class="pace-form" data-id="${c.id}"><strong>Перерыв между сообщениями</strong>${paceSelects(c, "d-pace")}<button type="submit" class="button compact">Применить</button></form>` : ""}`
+    }${(c.extra_texts || []).length ? `<p class="variant-note">Вариантов текста: ${c.extra_texts.length + 1}. Каждому получателю уходит один из них.</p>` : ""}<div class="preview-email">${esc(c.text) || '<span class="muted">Без текста</span>'}</div>${(c.extra_texts || []).map((t) => `<div class="preview-email">${esc(t)}</div>`).join("")}${c.status === "draft" ? "" : `<div class="actions-row" style="margin-top:16px"><a class="button compact" href="/api/campaigns/${c.id}/export.csv" download>${icon("download")}Скачать отчёт (CSV)</a></div>`}`,
     footer,
   );
 }
@@ -720,7 +755,12 @@ async function refresh() {
       render();
       if ($("#dialog").open && dialogState?.kind === "instance")
         instanceDetail(dialogState.id);
-      if ($("#dialog").open && dialogState?.kind === "campaign")
+      // пока человек выбирает новый перерыв, окно рассылки не перерисовываем
+      if (
+        $("#dialog").open &&
+        dialogState?.kind === "campaign" &&
+        !$("#pace-form")?.dataset.dirty
+      )
         campaignDetail(dialogState.id);
     } catch (e) {
       if (me) {
@@ -996,6 +1036,15 @@ const actions = {
   "instance-new": instanceForm,
   "manual-message": (el) => manualMessageDialog(el.dataset.id),
   "instance-open": (el) => instanceDetail(el.dataset.id),
+  "variant-add": () => {
+    $("#c-variants").insertAdjacentHTML("beforeend", variantBlock());
+    renumberVariants();
+    $("#c-variants .variant:last-child textarea").focus();
+  },
+  "variant-remove": (el) => {
+    el.closest(".variant").remove();
+    renumberVariants();
+  },
   "instance-qr": (el) => qrDialog(el.dataset.id),
   "instance-code": (el) => codeDialog(el.dataset.id),
   "add-mode": (el) => addConnectionDialog(el.dataset.mode),
@@ -1088,6 +1137,22 @@ document.addEventListener("change", async (e) => {
         await refresh();
       }
       return;
+    }
+    if (t.classList.contains("variant-template") && t.value) {
+      const tpl = data.templates.find((x) => x.id === Number(t.value));
+      const area = t.closest(".variant").querySelector("textarea");
+      if (tpl) area.value = tpl.text;
+      t.value = "";
+      area.focus();
+    }
+    if (t.closest("#pace-form")) t.closest("#pace-form").dataset.dirty = "1";
+    if (t.name === "pace_from") {
+      const to = t.parentElement.querySelector('[name="pace_to"]');
+      if (Number(to.value) < Number(t.value)) to.value = t.value;
+    }
+    if (t.name === "pace_to") {
+      const from = t.parentElement.querySelector('[name="pace_from"]');
+      if (Number(from.value) > Number(t.value)) from.value = t.value;
     }
     if (t.id === "c-template" && t.value) {
       const tpl = data.templates.find((x) => x.id === Number(t.value));
@@ -1193,6 +1258,16 @@ const submitters = {
     toast(message);
     await refresh();
     campaignDetail(saved.id);
+  },
+  "pace-form": async (form) => {
+    const f = new FormData(form);
+    const body = paceBody(f.get("pace_from"), f.get("pace_to"));
+    await post(`/campaigns/${form.dataset.id}/pace`, body);
+    delete form.dataset.dirty;
+    toast(
+      `Перерыв изменён: ${body.delay_min === body.delay_max ? "" : `от ${body.delay_min / 60} до `}${body.delay_max / 60} мин`,
+    );
+    await refresh();
   },
   "template-form": async (form) => {
     const id = form.dataset.id;

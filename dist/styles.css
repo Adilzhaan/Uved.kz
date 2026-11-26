@@ -2869,3 +2869,68 @@ details.advanced[open] summary {
     animation: none;
   }
 }
+
+/* ───── Перерыв и варианты текста ───── */
+.pace-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #5b6880;
+}
+.pace-row select {
+  width: auto;
+  min-width: 96px;
+}
+.pace-form {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfcff;
+}
+.pace-form strong {
+  font-size: 14px;
+  font-weight: 650;
+  margin-right: auto;
+}
+.variant {
+  margin-bottom: 12px;
+  padding: 12px 14px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfcff;
+}
+.variant-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+.variant select {
+  margin-bottom: 8px;
+}
+.variant-note {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.preview-email + .preview-email {
+  margin-top: 8px;
+}
+.pace-row select {
+  min-height: 38px;
+  padding: 6px 30px 6px 12px;
+  border: 1px solid #dfe5ef;
+  border-radius: 8px;
+  background-color: white;
+  font: inherit;
+  font-size: 14px;
+  color: var(--dark);
+}

@@ -551,13 +551,15 @@ async function campaignStats(c, instances, today) {
   };
 }
 async function campaignView(c, instances, today) {
-  return { ...c, instance_ids: parseIds(c.instance_ids), stats: await campaignStats(c, instances, today) };
+  return { ...c, instance_ids: parseIds(c.instance_ids), extra_texts: parseIds(c.extra_texts), stats: await campaignStats(c, instances, today) };
 }
 async function campaignInput(b, prev) {
   const minDelay = worker.MIN_DELAY_SEC;
   const out = {
     name: String(b.name ?? prev?.name ?? '').trim().slice(0, 120),
     text: String(b.text ?? prev?.text ?? '').slice(0, 4000),
+    extra_texts: JSON.stringify((Array.isArray(b.extra_texts) ? b.extra_texts : parseIds(prev?.extra_texts || '[]')).
+    map((t) => String(t ?? '').slice(0, 4000)).filter((t) => t.trim()).slice(0, 9)),
     media_url: b.media_url !== undefined ? String(b.media_url || '').trim() || null : prev?.media_url ?? null,
     media_name: b.media_name !== undefined ? String(b.media_name || '').trim().slice(0, 200) || null : prev?.media_name ?? null,
     list_id: b.list_id !== undefined ? b.list_id === null || b.list_id === '' ? null : Number(b.list_id) : prev?.list_id ?? null,
@@ -568,6 +570,11 @@ async function campaignInput(b, prev) {
     hour_to: int(b.hour_to ?? prev?.hour_to, 20, 1, 24),
     check_wa: (b.check_wa !== undefined ? b.check_wa : prev?.check_wa) ? 1 : 0
   };
+  const extras = parseIds(out.extra_texts);
+  if (!out.text.trim() && extras.length) { // основной текст пуст — первым становится следующий вариант
+    out.text = extras.shift();
+    out.extra_texts = JSON.stringify(extras);
+  }
   if (!out.name) throw bad('Укажите название кампании');
   if (!out.text.trim() && !out.media_url) throw bad('Добавьте текст сообщения или файл');
   if (out.media_url && !/^https?:\/\//.test(out.media_url)) throw bad('Ссылка на файл должна начинаться с http(s)://');
@@ -593,8 +600,8 @@ app.get('/api/campaigns/:id', async (req, res) => await sendCampaign(res, req.pa
 
 app.post('/api/campaigns', async (req, res) => {
   const c = await campaignInput(req.body || {}, null);
-  const id = (await db.prepare(`INSERT INTO campaigns(name, text, media_url, media_name, list_id, instance_ids, delay_min, delay_max, hour_from, hour_to, check_wa, created_at)
-    VALUES (@name, @text, @media_url, @media_name, @list_id, @instance_ids, @delay_min, @delay_max, @hour_from, @hour_to, @check_wa, @created_at)`).
+  const id = (await db.prepare(`INSERT INTO campaigns(name, text, extra_texts, media_url, media_name, list_id, instance_ids, delay_min, delay_max, hour_from, hour_to, check_wa, created_at)
+    VALUES (@name, @text, @extra_texts, @media_url, @media_name, @list_id, @instance_ids, @delay_min, @delay_max, @hour_from, @hour_to, @check_wa, @created_at)`).
   run({ ...c, created_at: Date.now() })).lastInsertRowid;
   await sendCampaign(res, id);
 });
@@ -605,10 +612,22 @@ app.put('/api/campaigns/:id', async (req, res) => {
   const b = { ...(req.body || {}) };
   if (prev.status !== 'draft') delete b.list_id; // базу можно менять только в черновике
   const c = await campaignInput(b, prev);
-  await db.prepare(`UPDATE campaigns SET name=@name, text=@text, media_url=@media_url, media_name=@media_name, list_id=@list_id,
+  await db.prepare(`UPDATE campaigns SET name=@name, text=@text, extra_texts=@extra_texts, media_url=@media_url, media_name=@media_name, list_id=@list_id,
     instance_ids=@instance_ids, delay_min=@delay_min, delay_max=@delay_max, hour_from=@hour_from, hour_to=@hour_to, check_wa=@check_wa
     WHERE id=@id`).run({ ...c, id: prev.id });
   await sendCampaign(res, prev.id);
+});
+
+// Перерыв между сообщениями можно менять прямо во время рассылки
+app.post('/api/campaigns/:id/pace', async (req, res) => {
+  const c = await getCampaign(req.params.id);
+  if (!['draft', 'running', 'paused'].includes(c.status)) throw bad('Рассылка уже завершена');
+  const lo = int(req.body?.delay_min, c.delay_min, Math.max(1, worker.MIN_DELAY_SEC), 3600);
+  const hi = Math.max(lo, int(req.body?.delay_max, c.delay_max, lo, 7200));
+  await db.prepare('UPDATE campaigns SET delay_min = ?, delay_max = ? WHERE id = ?').run(lo, hi, c.id);
+  worker.applyPace(parseIds(c.instance_ids), { delay_min: lo, delay_max: hi });
+  await logEvent(`Рассылка «${c.name}»: перерыв между сообщениями изменён на ${Math.round(lo / 60)}–${Math.round(hi / 60)} мин`);
+  await sendCampaign(res, c.id);
 });
 
 app.delete('/api/campaigns/:id', async (req, res) => {

@@ -82,6 +82,24 @@ async function finishIfDone(campaign) {
   return false;
 }
 
+/** Текст для сообщения: если у рассылки несколько вариантов, берём случайный */
+function pickText(camp) {
+  let extra = [];
+  try {extra = JSON.parse(camp.extra_texts || '[]') || [];} catch {/* пусто */}
+  const all = [camp.text, ...extra].filter((t) => typeof t === 'string' && t.trim());
+  return all.length ? all[randInt(0, all.length - 1)] : camp.text || '';
+}
+/** Перерыв рассылки изменили на ходу: номера, которые ждут дольше нового максимума, пересчитываем */
+function applyPace(instanceIds, camp) {
+  const now = Date.now();
+  const hi = Math.max(MIN_DELAY_SEC, camp.delay_min, camp.delay_max) * 1000;
+  for (const id of instanceIds) {
+    const s = runtime.get(id);
+    if (!s || s.nextAt <= now || s.nextAt - now <= hi) continue;
+    s.pauseMs = pickPauseMs(camp);
+    s.nextAt = now + s.pauseMs;
+  }
+}
 function parseVars(json) {
   try {return JSON.parse(json) || {};} catch {return {};}
 }
@@ -104,7 +122,7 @@ async function processMessage(inst, camp, msg) {
         return;
       }
     }
-    const text = renderTemplate(camp.text, { ...parseVars(contact.vars), name: contact.name, phone: contact.phone });
+    const text = renderTemplate(pickText(camp), { ...parseVars(contact.vars), name: contact.name, phone: contact.phone });
     const r = camp.media_url ?
     await api.sendFileByUrl(msg.phone, camp.media_url, camp.media_name || 'file', text) :
     await api.sendMessage(msg.phone, text);
@@ -226,5 +244,5 @@ function stop() {
 
 module.exports = {
   start, stop, tick, stopInstance, resetInstance, refreshInstance, applyState, pollStates,
-  dailyLimit, sentToday, nextSend, pickPauseMs, MIN_DELAY_SEC, BAD_STATES
+  dailyLimit, sentToday, nextSend, pickPauseMs, pickText, applyPace, MIN_DELAY_SEC, BAD_STATES
 };
