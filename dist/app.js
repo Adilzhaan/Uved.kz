@@ -442,7 +442,9 @@ function campaignDetail(id) {
             "stop",
             "campaign-stop",
             "text danger-button",
-          ) + a("Пауза", "pause", "campaign-pause", "primary")
+          ) +
+          button("Свернуть", null, "close") +
+          a("Пауза", "pause", "campaign-pause", "primary")
         : c.status === "paused"
           ? a(
               "Остановить совсем",
@@ -725,7 +727,28 @@ function render() {
   $("#main").innerHTML = loaded
     ? pages[page]()
     : '<div class="empty">Загрузка…</div>';
+  renderDock();
   tickCountdowns();
+}
+// Свёрнутые рассылки: плашка внизу экрана, пока рассылка идёт — видна на любой странице
+function renderDock() {
+  let dock = $("#dock");
+  if (!dock) {
+    dock = document.createElement("div");
+    dock.id = "dock";
+    dock.setAttribute("aria-label", "Идущие рассылки");
+    document.body.append(dock);
+  }
+  const running = loaded
+    ? (data.campaigns || []).filter((c) => c.status === "running")
+    : [];
+  dock.innerHTML = running
+    .slice(0, 3)
+    .map((c) => {
+      const st = c.stats;
+      return `<button type="button" class="dock-item" data-act="campaign-open" data-id="${c.id}" title="Открыть рассылку"><span class="dock-top"><span class="dock-dot"></span><strong>${esc(c.name)}</strong><span class="dock-count">${num(st.sent)} из ${num(st.total)}</span></span><span class="mini-progress"><span style="width:${donePercent(st)}%"></span></span>${campaignNext(c) || `<small class="dock-note">${st.queue ? "Ждёт своей очереди" : "Завершается…"}</small>`}</button>`;
+    })
+    .join("");
 }
 async function load() {
   const jobs = [
@@ -737,8 +760,7 @@ async function load() {
   ];
   if (page === "base" || page === "campaigns")
     jobs.push(api("/lists").then((r) => (data.lists = r)));
-  if (page === "campaigns")
-    jobs.push(api("/campaigns").then((r) => (data.campaigns = r)));
+  jobs.push(api("/campaigns").then((r) => (data.campaigns = r)));
   if (page === "templates")
     jobs.push(api("/templates").then((r) => (data.templates = r)));
   await Promise.all(jobs);
