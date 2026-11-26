@@ -221,19 +221,19 @@ function campaignsPage() {
 }
 // Перерыв между сообщениями в минутах: «от» и «до», выбирается случайно в этих границах
 const paceMinutes = (c) => {
-  const from = Math.min(15, Math.max(1, Math.round((c.delay_min || 120) / 60)));
+  const from = Math.min(15, Math.max(2, Math.round((c.delay_min || 120) / 60)));
   return [from, Math.min(15, Math.max(from, Math.round((c.delay_max || 240) / 60)))];
 };
 function paceSelects(c, prefix) {
   const [from, to] = paceMinutes(c);
   const opts = (sel) =>
-    Array.from({ length: 15 }, (_, k) => k + 1)
+    Array.from({ length: 14 }, (_, k) => k + 2)
       .map((m) => `<option value="${m}" ${m === sel ? "selected" : ""}>${m} мин</option>`)
       .join("");
   return `<div class="pace-row"><span>от</span><select id="${prefix}-from" name="pace_from" aria-label="Перерыв от, минут">${opts(from)}</select><span>до</span><select id="${prefix}-to" name="pace_to" aria-label="Перерыв до, минут">${opts(to)}</select></div>`;
 }
 const paceBody = (from, to) => {
-  const a = Math.max(1, Number(from) || 2);
+  const a = Math.max(2, Number(from) || 2);
   return { delay_min: a * 60, delay_max: Math.max(a, Number(to) || a) * 60 };
 };
 // Один дополнительный вариант текста в форме рассылки
@@ -288,7 +288,7 @@ function campaignForm(existing = null, copy = false, preset = null) {
 <details class="advanced"><summary>Дополнительные настройки</summary>
 <div class="field"><label for="c-name">Название рассылки</label><input id="c-name" name="name" value="${esc(c.name)}" maxlength="120" required/></div>
 <div class="field"><label>С каких номеров отправлять</label><div class="checks">${data.instances.map((i) => `<label class="check"><input type="checkbox" name="instance" value="${i.id}" ${c.instance_ids.includes(i.id) ? "checked" : ""}/>${esc(i.name)} <span class="muted">· до ${num(i.limit_today)} в день${i.state === "authorized" ? "" : " · не подключён"}</span></label>`).join("")}</div></div>
-<div class="form-grid"><div class="field"><label>Перерыв между сообщениями</label>${paceSelects(c, "c-pace")}<small>Выбирается случайно в этих границах после каждого сообщения. Менять можно и во время рассылки.</small></div>
+<div class="form-grid"><div class="field"><label>Перерыв между сообщениями</label>${paceSelects(c, "c-pace")}<small>Выбирается случайно в этих границах после каждого сообщения. Раз в 15–25 сообщений номер сам отдыхает 12–20 минут. Менять перерыв можно и во время рассылки.</small></div>
 <div class="field"><label for="c-hfrom">Часы отправки</label><div class="form-grid"><input id="c-hfrom" name="hour_from" type="number" min="0" max="23" value="${c.hour_from}" required aria-label="Час с"/><input name="hour_to" type="number" min="1" max="24" value="${c.hour_to}" required aria-label="Час до"/></div><small>Время ${esc(tz)}.</small></div></div>
 <div class="field" style="margin-top:17px"><label class="check"><input type="checkbox" name="check_wa" ${c.check_wa ? "checked" : ""}/>Сначала проверять, есть ли у номера WhatsApp</label></div>
 ${status === "draft" ? `<div class="field"><label for="c-exclude">Не писать тем, кому уже писали за последние N дней</label><input id="c-exclude" name="exclude_recent_days" type="number" min="0" max="3650" value="${Number(c.exclude_recent_days) || 0}"/><small>0 — писать всем из базы.</small></div>` : ""}
@@ -333,7 +333,7 @@ const mmss = (ms) => {
 // Кольцо с таймером; цифры и заполнение обновляет tickCountdowns раз в секунду
 function countdown(i, label) {
   if (!i.next_send_at) return "";
-  return `<div class="countdown" data-next-at="${i.next_send_at}" data-pause="${i.pause_ms || 0}"><span class="countdown-ring" aria-hidden="true"><span class="countdown-time"></span></span><span class="countdown-text"><strong>${label}</strong><small class="countdown-caption"></small></span></div>`;
+  return `<div class="countdown" data-next-at="${i.next_send_at}" data-pause="${i.pause_ms || 0}"${i.long_rest ? " data-long" : ""}><span class="countdown-ring" aria-hidden="true"><span class="countdown-time"></span></span><span class="countdown-text"><strong>${label}</strong><small class="countdown-caption"></small></span></div>`;
 }
 let countdownRefresh = 0;
 function tickCountdowns() {
@@ -352,8 +352,10 @@ function tickCountdowns() {
     el.querySelector(".countdown-caption").textContent = done
       ? "Отправляем сообщение…"
       : el.classList.contains("compact")
-        ? `Следующее сообщение через ${mmss(left)}`
-        : "до следующего сообщения";
+        ? `${"long" in el.dataset ? "Номер отдыхает, следующее" : "Следующее сообщение"} через ${mmss(left)}`
+        : "long" in el.dataset
+          ? "длинный отдых номера — защита от блокировки"
+          : "до следующего сообщения";
     if (done) due = true;
   }
   // перерыв закончился — подтянем свежие данные, не дожидаясь автообновления

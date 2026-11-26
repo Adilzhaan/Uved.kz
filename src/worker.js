@@ -15,7 +15,7 @@ const BAD_STATES = new Set(['blocked', 'yellowCard']);
 const runtime = new Map(); // instance.id → { nextAt, busy, errors }
 function rt(id) {
   let s = runtime.get(id);
-  if (!s) runtime.set(id, s = { nextAt: 0, pauseMs: 0, busy: false, errors: 0 });
+  if (!s) runtime.set(id, s = { nextAt: 0, pauseMs: 0, busy: false, errors: 0, streak: 0, restAfter: 0, longRest: false });
   return s;
 }
 function resetInstance(id) {
@@ -30,12 +30,30 @@ function pickPauseMs(camp) {
   const hi = Math.max(lo, camp.delay_max);
   if (lo < 60) return randInt(lo * 1000, hi * 1000);
   const from = Math.ceil(lo / 60);
-  return randInt(from, Math.max(from, Math.floor(hi / 60))) * 60000;
+  // ровные интервалы выглядят как робот, поэтому к целым минутам добавляем случайные секунды
+  return randInt(from, Math.max(from, Math.floor(hi / 60))) * 60000 + randInt(-25000, 25000);
+}
+/**
+ * Перерыв после успешной отправки. Раз в 15–25 сообщений подряд номер отдыхает 12–20 минут,
+ * как живой человек. В тестовом режиме (перерыв меньше минуты) длинного отдыха нет.
+ */
+function nextPause(s, camp) {
+  s.longRest = false;
+  if (Math.max(MIN_DELAY_SEC, camp.delay_min) < 60) return pickPauseMs(camp);
+  if (!s.restAfter) s.restAfter = randInt(15, 25);
+  s.streak += 1;
+  if (s.streak < s.restAfter) return pickPauseMs(camp);
+  s.streak = 0;
+  s.restAfter = randInt(15, 25);
+  s.longRest = true;
+  return randInt(12 * 60000, 20 * 60000);
 }
 /** Когда номер отправит следующее сообщение и какой длины текущий перерыв (для обратного отсчёта) */
 function nextSend(id) {
   const s = runtime.get(id);
-  return s && s.nextAt > Date.now() ? { next_send_at: s.nextAt, pause_ms: s.pauseMs || 0 } : { next_send_at: null, pause_ms: 0 };
+  return s && s.nextAt > Date.now() ?
+  { next_send_at: s.nextAt, pause_ms: s.pauseMs || 0, long_rest: !!s.longRest } :
+  { next_send_at: null, pause_ms: 0, long_rest: false };
 }
 
 /** Дневной лимит с прогревом: min(max, start + step × дней с первой отправки) */
@@ -95,7 +113,7 @@ function applyPace(instanceIds, camp) {
   const hi = Math.max(MIN_DELAY_SEC, camp.delay_min, camp.delay_max) * 1000;
   for (const id of instanceIds) {
     const s = runtime.get(id);
-    if (!s || s.nextAt <= now || s.nextAt - now <= hi) continue;
+    if (!s || s.longRest || s.nextAt <= now || s.nextAt - now <= hi + 25000) continue;
     s.pauseMs = pickPauseMs(camp);
     s.nextAt = now + s.pauseMs;
   }
@@ -136,7 +154,7 @@ async function processMessage(inst, camp, msg) {
       await qFirstDay.run(today, inst.id);
     })();
     s.errors = 0;
-    s.pauseMs = pickPauseMs(camp); // случайный перерыв после успешной отправки
+    s.pauseMs = nextPause(s, camp); // случайный перерыв после успешной отправки
     s.nextAt = now + s.pauseMs;
   } catch (e) {
     const status = e.status;
