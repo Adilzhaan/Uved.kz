@@ -186,7 +186,7 @@ function stepsBlock() {
   return `<section class="steps" aria-label="Быстрый старт">${steps
     .map(
       ([done, ic, title, text, label, act], i) =>
-        `<article class="panel step ${done ? "done" : i === next ? "next" : ""}"><div class="step-top"><span class="mail-tile">${icon(done ? "check" : ic)}</span><span class="step-no">Шаг ${i + 1} из 3</span></div><h3>${title}</h3><p>${text}</p>${done ? '<span class="badge done"><i></i>Готово</span>' : button(label, null, act, i === next ? "primary" : "")}</article>`,
+        `<article class="panel step ${done ? "done" : i === next ? "next" : ""}"><div class="step-top"><span class="step-mark num">${done ? icon("check") : i + 1}</span><span class="step-no">Шаг ${i + 1} из 3</span></div><h3>${title}</h3><p>${text}</p>${done ? '<span class="badge done">Готово</span>' : button(label, null, act, i === next ? "primary" : "")}</article>`,
     )
     .join("")}</section>`;
 }
@@ -196,8 +196,22 @@ const listName = (c) =>
     : data.lists.find((l) => l.id === c.list_id)?.name || "База удалена";
 const donePercent = (st) =>
   st.total ? Math.floor(((st.total - st.queue) / st.total) * 100) : 0;
+// Сегодня: дневной счёт всех номеров, очередь и непрочитанные — цифры из /api/overview
+function todayStrip() {
+  const o = data.overview || {};
+  const pct = share(o.sent_today, o.limit_today);
+  return `<section class="today" aria-label="Сегодня"><div class="today-main"><span class="today-label">Отправлено сегодня</span><span class="today-figure"><span class="num">${num(o.sent_today)}</span><span class="today-of">из ${num(o.limit_today)} по лимитам номеров</span></span><div class="big-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Дневной лимит номеров"><span style="--p:${pct}"></span></div></div><dl class="today-cells"><div><dt>В очереди</dt><dd class="num">${num(o.queue)}</dd></div><div><dt>Номеров в работе</dt><dd class="num">${num(o.instances_active)}<small> из ${num(o.instances)}</small></dd></div><a class="is-person" href="#chats"><dt>Непрочитанных чатов</dt><dd class="num">${num(o.chats_unread)}</dd></a></dl></section>`;
+}
+// Идущая рассылка крупно: сколько ушло, что с доставкой, когда следующее сообщение
+function liveCard(c) {
+  const st = c.stats;
+  const p = donePercent(st);
+  const hint = campaignHint(c);
+  return `<article class="live-card${c.status === "paused" ? " is-paused" : ""}"><header class="live-head"><button type="button" class="live-name" data-act="campaign-open" data-id="${c.id}"><strong>${esc(c.name)}</strong><small>${esc(listName(c))}</small></button>${badge(campaignStatuses, c.status)}</header><div class="live-figure"><span class="num">${num(st.sent)}</span><span class="live-of">из ${num(st.total)} отправлено</span></div><div class="big-progress live-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p}" aria-label="Обработано"><span style="--p:${p}"></span></div><dl class="live-cells"><div><dt>Доставлено</dt><dd class="num">${num(st.delivered)}</dd></div><div><dt>Прочитано</dt><dd class="num">${num(st.read)}</dd></div><div class="is-person"><dt>Ответили</dt><dd class="num">${num(st.replied)}</dd></div><div><dt>В очереди</dt><dd class="num">${num(st.queue)}</dd></div></dl><footer class="live-foot">${campaignNext(c) || (hint ? `<small class="live-hint">${hint}</small>` : "<span></span>")}${button("Открыть", null, "campaign-open", "compact", `data-id="${c.id}"`)}</footer></article>`;
+}
 function campaignsPage() {
   const rows = data.campaigns;
+  const live = rows.filter((c) => ["running", "paused"].includes(c.status));
   return (
     heading(
       "Рассылки",
@@ -205,13 +219,17 @@ function campaignsPage() {
       button("Написать сообщение", "message", "manual-message") +
         button("Новая рассылка", "plus", "campaign-new", "primary"),
     ) +
+    todayStrip() +
     stepsBlock() +
-    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Мои рассылки <span class="section-count">${rows.length}</span></h2><span class="section-caption">Сегодня отправлено: ${num(data.overview.sent_today)}</span></div>${
+    (live.length
+      ? `<section class="live" aria-label="Идут сейчас"><h2 class="block-title">Идут сейчас <span class="section-count">${live.length}</span></h2><div class="live-grid">${live.map(liveCard).join("")}</div></section>`
+      : "") +
+    `<section class="panel ledger"><div class="panel-heading simple-panel-heading"><h2>Все рассылки <span class="section-count">${rows.length}</span></h2><span class="section-caption">Сегодня отправлено: ${num(data.overview.sent_today)}</span></div>${
       rows.length
-        ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название</th><th>Статус</th><th>Отправлено</th><th>Ответили</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows
+        ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название</th><th>Статус</th><th>Отправлено</th><th class="t-num">Ответили</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows
             .map((c) => {
               const st = c.stats;
-              return `<tr><td><button class="campaign-name" data-act="campaign-open" data-id="${c.id}"><span class="mail-tile">${icon("send")}</span><span style="text-align:left"><strong>${esc(c.name)}</strong><small>${esc(listName(c))}</small></span></button></td><td data-label="Статус">${badge(campaignStatuses, c.status)}${campaignNext(c)}</td><td data-label="Отправлено">${c.status === "draft" ? '<span class="muted">ещё не запускалась</span>' : `<span class="progress-cell"><strong>${num(st.sent)} из ${num(st.total)}</strong><span class="mini-progress"><span style="--p:${donePercent(st)}"></span></span></span>`}</td><td data-label="Ответили">${st.sent ? num(st.replied) : "—"}</td><td class="connection-actions"><div class="row-actions">${button("Открыть", null, "campaign-open", "compact", `data-id="${c.id}"`)}</div></td></tr>`;
+              return `<tr><td><button class="campaign-name" data-act="campaign-open" data-id="${c.id}"><span style="text-align:left"><strong>${esc(c.name)}</strong><small>${esc(listName(c))}</small></span></button></td><td data-label="Статус">${badge(campaignStatuses, c.status)}${campaignNext(c)}</td><td data-label="Отправлено">${c.status === "draft" ? '<span class="muted">ещё не запускалась</span>' : `<span class="progress-cell"><strong>${num(st.sent)} из ${num(st.total)}</strong><span class="mini-progress"><span style="--p:${donePercent(st)}"></span></span></span>`}</td><td data-label="Ответили" class="t-num">${st.sent ? num(st.replied) : "—"}</td><td class="connection-actions"><div class="row-actions">${button("Открыть", null, "campaign-open", "compact", `data-id="${c.id}"`)}</div></td></tr>`;
             })
             .join("")}</tbody></table></div>`
         : empty(
@@ -493,7 +511,7 @@ function templatesPage() {
       button("Новый шаблон", "plus", "template-new", "primary"),
     ) +
     (data.templates.length
-      ? `<div class="tpl-grid">${data.templates.map((t) => `<article class="panel tpl-card"><h3>${esc(t.name)}</h3><div class="tpl-text">${esc(t.text)}</div><div class="actions-row">${button("Использовать", "send", "template-use", "primary compact", `data-id="${t.id}"`)}${button("Изменить", "edit", "template-edit", "compact", `data-id="${t.id}"`)}${button("Удалить", "trash", "template-delete", "text danger-button compact", `data-id="${t.id}"`)}</div></article>`).join("")}</div>`
+      ? `<div class="tpl-grid">${data.templates.map((t) => `<article class="panel tpl-card"><h3>${esc(t.name)}</h3><div class="tpl-chat"><div class="tpl-text">${esc(t.text)}</div></div><div class="actions-row">${button("Использовать", "send", "template-use", "primary compact", `data-id="${t.id}"`)}${button("Изменить", "edit", "template-edit", "compact", `data-id="${t.id}"`)}${button("Удалить", "trash", "template-delete", "text danger-button compact", `data-id="${t.id}"`)}</div></article>`).join("")}</div>`
       : `<section class="panel">${empty("copy", "Шаблонов пока нет", "Сохраните удачный текст, чтобы не набирать его заново.")}</section>`)
   );
 }
@@ -521,11 +539,11 @@ function numberCard(i) {
       : i.sent_today >= i.limit_today
         ? "Лимит на сегодня выбран — продолжит завтра."
         : "";
-  return `<article class="number-card${on && i.enabled ? "" : " is-off"}" data-number="${i.id}">
-<header><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span class="mail-tile">${icon("phone")}</span><span><strong>${esc(i.name)}</strong><small>${i.phone ? phoneFmt(i.phone) : "Ждёт подключения"}</small></span></button>${badge(instanceStates, i.state)}</header>
+  return `<article class="number-card${on && i.enabled ? "" : " is-off"}" data-number="${i.id}" role="listitem">
+<header><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span><strong>${esc(i.name)}</strong><small>${i.phone ? phoneFmt(i.phone) : "Ждёт подключения"}</small></span></button>${badge(instanceStates, i.state)}</header>
 <div class="number-today"><div class="progress-caption"><span>Сегодня отправлено</span><strong>${num(i.sent_today)} из ${num(i.limit_today)}</strong></div><div class="big-progress"><span style="--p:${share(i.sent_today, i.limit_today)}"></span></div></div>
 <dl class="number-stats"><div><dt>Отправлено</dt><dd>${num(i.sent_total)}</dd></div><div><dt>Доставлено</dt><dd>${num(i.delivered_total)}</dd></div><div><dt>Прочитано</dt><dd>${num(i.read_total)}</dd></div><div><dt>Ответили</dt><dd>${num(i.replied_total)}</dd></div></dl>
-${note ? `<p class="number-note">${note}</p>` : ""}${on && i.enabled ? countdown(i, "Перерыв между сообщениями") : ""}
+<div class="lane-live">${note ? `<p class="number-note">${note}</p>` : ""}${on && i.enabled ? countdown(i, "Перерыв между сообщениями") : ""}</div>
 <div class="number-foot">${on ? `<label class="switch"><input type="checkbox" data-toggle-number="${i.id}" ${i.enabled ? "checked" : ""}/><span class="switch-track"></span><span>${i.enabled ? "Участвует в рассылках" : "Не участвует в рассылках"}</span></label>` : a("Подключить по QR", "qr", "instance-qr", "primary compact")}<div class="row-actions">${on && i.enabled ? a("Написать", "message", "manual-message", "compact") : ""}${a("Подробнее", null, "instance-open", "compact")}</div></div>
 </article>`;
 }
@@ -539,7 +557,7 @@ function numbersPage() {
         button("Подключить номер", "plus", "connect-number"),
     ) +
     (rows.length
-      ? `<div class="number-grid">${rows.map(numberCard).join("")}</div>`
+      ? `<div class="number-grid" role="list">${rows.map(numberCard).join("")}</div>`
       : `<section class="panel">${empty("phone", "Подключите первый номер", "Нажмите «Подключить номер» и наведите камеру телефона на код на экране. Номеров можно подключить несколько.")}</section>`) +
     `<p class="page-note"><button type="button" class="link-button" data-act="instance-new">Добавить подключение GREEN-API вручную</button></p>`
   );
@@ -553,8 +571,10 @@ function basePage() {
       button("Загрузить Excel", "upload", "import", "primary") +
         button("Добавить Google Таблицу", "plus", "import-google"),
     ) +
+    `<div class="base-layout">` +
+    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Загруженные базы <span class="section-count">${rows.length}</span></h2><span class="section-caption">${num(data.overview.contacts)} уникальных контактов</span></div>${rows.length ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название базы</th><th class="t-num">Контактов</th><th>Дата загрузки</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows.map((l) => `<tr><td><span class="campaign-name"><strong>${esc(l.name)}</strong></span></td><td data-label="Контактов" class="t-num">${num(l.contacts)}</td><td data-label="Загружена">${dateTime(l.created_at)}</td><td class="connection-actions"><div class="row-actions"><a class="button compact" href="/api/lists/${l.id}/recipients.csv" download="recipients.csv">${icon("download")}Получатели</a>${button("Удалить", "trash", "list-delete", "text danger-button", `data-id="${l.id}"`)}</div></td></tr>`).join("")}</tbody></table></div>` : empty("database", "Добавьте базу получателей", "Загрузите файл с номерами телефонов. Имена и другие данные о контактах сохранятся вместе с базой.")}</section>` +
     importGuide() +
-    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Загруженные базы <span class="section-count">${rows.length}</span></h2><span class="section-caption">${num(data.overview.contacts)} уникальных контактов</span></div>${rows.length ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название базы</th><th>Контактов</th><th>Дата загрузки</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows.map((l) => `<tr><td><span class="campaign-name"><span class="mail-tile">${icon("file")}</span><strong>${esc(l.name)}</strong></span></td><td data-label="Контактов">${num(l.contacts)}</td><td data-label="Загружена">${dateTime(l.created_at)}</td><td class="connection-actions"><div class="row-actions"><a class="button compact" href="/api/lists/${l.id}/recipients.csv" download="recipients.csv">${icon("download")}Получатели</a>${button("Удалить", "trash", "list-delete", "text danger-button", `data-id="${l.id}"`)}</div></td></tr>`).join("")}</tbody></table></div>` : empty("database", "Добавьте базу получателей", "Загрузите файл с номерами телефонов. Имена и другие данные о контактах сохранятся вместе с базой.")}</section>`
+    `</div>`
   );
 }
 // Добавление подключения GREEN-API: вставить данные целиком или заполнить по полям
@@ -801,9 +821,11 @@ function renderDock() {
   }
   // в чатах плашка уезжает наверх, чтобы не закрывать поле ответа
   dock.classList.toggle("top", page === "chats");
-  const running = loaded
-    ? (data.campaigns || []).filter((c) => c.status === "running")
-    : [];
+  // на экране «Рассылки» идущие рассылки и так стоят крупно в блоке «Идут сейчас»
+  const running =
+    loaded && page !== "campaigns"
+      ? (data.campaigns || []).filter((c) => c.status === "running")
+      : [];
   dock.innerHTML = running
     .slice(0, 3)
     .map((c) => {
@@ -926,13 +948,33 @@ function navigate() {
     loaded = false;
     closeDialog();
   }
+  const changed = next !== page;
   page = next;
   $("#sidebar").classList.remove("open");
   $("#mobile-menu").setAttribute("aria-expanded", "false");
   if (!me) return;
+  // смена раздела: новый экран собирается на свежих данных, старый уступает ему место
+  if (changed && document.startViewTransition && !motionReduced()) {
+    document.startViewTransition(() => refresh().then(enterPage));
+    window.scrollTo(0, 0);
+    return;
+  }
   render();
   window.scrollTo(0, 0);
-  refresh();
+  refresh().then(() => changed && enterPage());
+}
+const motionReduced = () =>
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+let enterTimer = 0;
+// блоки нового экрана поднимаются по очереди; класс снимается, чтобы автообновление их не повторяло
+function enterPage() {
+  const main = $("#main");
+  if (!main || motionReduced()) return;
+  main.classList.remove("is-entering");
+  void main.offsetWidth;
+  main.classList.add("is-entering");
+  clearTimeout(enterTimer);
+  enterTimer = setTimeout(() => main.classList.remove("is-entering"), 900);
 }
 window.addEventListener("hashchange", navigate);
 function modal(title, body, footer = "") {

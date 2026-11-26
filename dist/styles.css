@@ -1,8 +1,8 @@
-/* Hallmark · shape: app screen · genre: modern-minimal · theme: Console (deal 3/3, seed admin-app-whatsapp-bulk-messaging-6482·503594c1·2026-11-26·r0) · redesign: restyle
- * nav: kept (sidebar, five destinations, collapses to a menu under 780px) · signature: the send queue, figures set in the instrument face · states: loading, empty, error, full, sending, paused · console: paper
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: Console (deal 3/3, seed admin-app-whatsapp-bulk-messaging-6482·503594c1·2026-11-26·r0) · redesign: full
+ * nav: top bar (five destinations; the sidebar markup becomes the bar, a drawer under 60rem) · signature: the day's count and the campaigns going out now, figures in the instrument face · states: loading, empty, error, full, sending, paused · console: paper
  * axes: light/grotesk-sans/chromatic-amber · posture: restrained · contrast: pass · faces: Onest for Host Grotesk, JetBrains Mono for Atkinson Hyperlegible Mono (no Cyrillic in either) · v2.0.0 */
-/* Hallmark · pre-emit critique: P3 H- E3 S3 R4 V3 · weakest: S, the layout is kept, so the screens still open on a heading and a table; a full redesign would lead each with its queue */
-/* Hallmark · waive 76: /favicon.svg is served by the app; the disk render cannot resolve a root path · waive 39b: .profile is the account row (avatar, name, sign-out), not a control in the toolbar range */
+/* Hallmark · pre-emit critique: P4 H- E3 S4 R4 V4 · weakest: E, the screens are dense by nature; each now leads with one instrument (today, the lanes, the lists) so the eye has a first stop */
+/* Hallmark · waive 39b · .profile stands 40px in the bar, the 21px reading is the unstyled disk render · it is the account row «Мой аккаунт» with «Выйти», sized as a bar control */
 /* Hallmark · answered F24: dialogs and the dock float over the page, so they keep one soft shadow under a hairline; nothing else is raised */
 @import url("./tokens.css");
 @import url("./base.css");
@@ -706,7 +706,7 @@ button.campaign-name:hover strong {
   font-weight: 600;
   color: var(--color-ink);
 }
-footer {
+.shell > footer {
   max-width: 1600px;
   width: 100%;
   margin: 0 auto;
@@ -717,7 +717,7 @@ footer {
   font-size: 12px;
   color: var(--color-muted);
 }
-footer > span:last-child {
+.shell > footer > span:last-child {
   display: flex;
   align-items: center;
   gap: var(--space-xs);
@@ -1217,7 +1217,7 @@ input[type="checkbox"] {
     gap: var(--space-sm);
   }
 }
-@media (max-width: 780px) {
+@media (max-width: 960px) {
   :root {
     --sidebar: 240px;
   }
@@ -1265,7 +1265,7 @@ input[type="checkbox"] {
   .dialog-footer {
     flex-wrap: wrap;
   }
-  footer {
+  .shell > footer {
     padding: var(--space-sm) var(--space-lg) 20px;
   }
   .row-actions .button {
@@ -1344,7 +1344,7 @@ input[type="checkbox"] {
     padding: var(--space-sm) var(--space-sm);
     min-height: 42px;
   }
-  footer {
+  .shell > footer {
     padding: var(--space-xs) 20px 20px;
     flex-direction: column;
     gap: var(--space-xs);
@@ -1635,7 +1635,7 @@ details.advanced[open] summary {
   display: block;
   font-weight: 400;
 }
-@media (max-width: 780px) {
+@media (max-width: 960px) {
   .steps {
     grid-template-columns: 1fr;
   }
@@ -2386,7 +2386,7 @@ details.advanced[open] summary {
 .chat-closed {
   margin: var(--space-sm) 20px;
 }
-@media (max-width: 780px) {
+@media (max-width: 960px) {
   .chats {
     grid-template-columns: minmax(0, 1fr);
     height: calc(100vh - 190px);
@@ -2424,7 +2424,7 @@ details.advanced[open] summary {
   top: 92px;
   bottom: auto;
 }
-@media (max-width: 780px) {
+@media (max-width: 960px) {
   #dock.top {
     display: none;
   }
@@ -2459,7 +2459,7 @@ dialog[open]::backdrop {
 }
 
 /* the drawer on phones: hidden only when the script has said it is a drawer */
-@media (max-width: 780px) {
+@media (max-width: 960px) {
   .sidebar {
     visibility: visible;
   }
@@ -2510,12 +2510,12 @@ dialog[open]::backdrop {
 .link-button:hover {
   text-decoration-color: var(--color-accent);
 }
-main a:not(.button):not(.nav-item):not(.brand) {
+main a:not(.button):not(.nav-item):not(.brand):not(.is-person) {
   text-decoration: underline;
   text-decoration-color: var(--color-rule-2);
   text-underline-offset: 0.2em;
 }
-main a:not(.button):not(.nav-item):not(.brand):hover {
+main a:not(.button):not(.nav-item):not(.brand):not(.is-person):hover {
   text-decoration-color: var(--color-accent);
 }
 
@@ -2542,5 +2542,649 @@ details.advanced summary:hover {
   .button,
   .switch-track::after {
     transition: none;
+  }
+}
+
+/* ═════ Full redesign: the composition ═════
+   Five destinations do not earn a sidebar: on a wide screen the sidebar markup becomes one top bar,
+   under 60rem it is the drawer it always was. Each screen now leads with its instrument. */
+
+@media (min-width: 961px) {
+  :root {
+    --bar: 60px;
+  }
+  .sidebar {
+    inset: 0 0 auto 0;
+    width: auto;
+    height: var(--bar);
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-lg);
+    padding: 0 max(var(--space-lg), calc((100% - var(--container)) / 2 + var(--space-lg)));
+    border-right: 0;
+    border-bottom: 1px solid var(--color-rule);
+    background: color-mix(in oklab, var(--color-paper) 88%, transparent);
+    backdrop-filter: saturate(1.4) blur(10px);
+    overflow: visible;
+    z-index: var(--z-sticky-nav);
+  }
+  .sidebar .brand {
+    padding: 0;
+    font-size: 19px;
+    flex: none;
+  }
+  .sidebar .brand img {
+    width: 28px;
+    height: 28px;
+  }
+  .sidebar > .nav-label {
+    display: none;
+  }
+  #navigation {
+    display: flex;
+    align-items: stretch;
+    gap: var(--space-3xs);
+    height: 100%;
+  }
+  .nav-item {
+    width: auto;
+    margin: 0;
+    padding: 0 var(--space-sm);
+    min-height: 0;
+    height: 100%;
+    border-radius: 0;
+    background: transparent;
+    gap: var(--space-xs);
+  }
+  .nav-item .icon {
+    width: 16px;
+    height: 16px;
+  }
+  .nav-item:hover,
+  .nav-item.active {
+    background: transparent;
+  }
+  .nav-item:active {
+    background: var(--color-paper-3);
+  }
+  .nav-item.active::before {
+    inset: auto var(--space-sm) -1px;
+    top: auto;
+    width: auto;
+    height: 2px;
+    border-radius: 2px 2px 0 0;
+    view-transition-name: nav-current;
+  }
+  .nav-badge {
+    margin-left: var(--space-2xs);
+  }
+  .sidebar-bottom {
+    margin: 0 0 0 auto;
+    padding: 0;
+  }
+  .profile {
+    margin: 0;
+    padding: var(--space-2xs) var(--space-xs) var(--space-2xs) var(--space-2xs);
+    border: 1px solid transparent;
+    border-top: 1px solid transparent;
+    border-radius: var(--radius-pill);
+    min-height: 40px;
+    transition: border-color var(--dur-micro) var(--ease-out), background-color var(--dur-micro) var(--ease-out);
+  }
+  .profile:hover {
+    border-color: var(--color-rule);
+    background: var(--color-paper-2);
+  }
+  .profile .avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 11px;
+  }
+  .profile strong {
+    display: none;
+  }
+  .profile small {
+    margin: 0;
+    font-size: 13px;
+    color: var(--color-ink-2);
+  }
+  .shell {
+    margin-left: 0;
+    padding-top: var(--bar);
+  }
+  .topbar {
+    display: none;
+  }
+  main,
+  .shell > footer {
+    max-width: var(--container);
+    padding-inline: max(var(--space-lg), calc(var(--space-xl) - 0px));
+  }
+  main {
+    padding-top: var(--space-xl);
+  }
+  .toast {
+    left: 50%;
+  }
+  #dock.top {
+    top: calc(var(--bar) + var(--space-md));
+  }
+}
+
+/* page heading: the screen's name on one line with its actions */
+.page-heading {
+  align-items: flex-end;
+  padding-bottom: var(--space-md);
+  margin-bottom: var(--space-lg);
+  border-bottom: 1px solid var(--color-rule);
+}
+.page-heading h1 {
+  font-size: var(--text-3xl);
+}
+.block-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0 0 var(--space-sm);
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: normal;
+}
+
+/* ───── Today: the day's count, set as the instrument reads it ───── */
+.today {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 2fr);
+  margin-bottom: var(--space-xl);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-card);
+  background: var(--color-paper-2);
+  overflow: hidden;
+}
+.today-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--space-xs);
+  padding: var(--space-lg);
+  border-right: 1px solid var(--color-rule);
+}
+.today-label,
+.today-cells dt,
+.live-cells dt {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.today-figure {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2xs) var(--space-sm);
+}
+.today-figure .num {
+  font-size: clamp(2.6rem, 2rem + 2.4vw, 4rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: var(--color-ink);
+}
+.today-of,
+.live-of {
+  font-size: 14px;
+  color: var(--color-muted);
+}
+.today .big-progress {
+  height: 4px;
+  margin: var(--space-sm) 0 0;
+}
+.today-cells {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+.today-cells > * {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  padding: var(--space-lg);
+  border-right: 1px solid var(--color-rule);
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+.today-cells > *:last-child {
+  border-right: 0;
+}
+.today-cells dd,
+.live-cells dd {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--color-ink);
+}
+.today-cells dd small {
+  font-size: 14px;
+  letter-spacing: normal;
+  color: var(--color-muted);
+}
+.today-cells .is-person dd,
+.live-cells .is-person dd {
+  color: var(--color-accent-text);
+}
+a.is-person:hover {
+  background: var(--color-accent-soft);
+}
+main .today a.is-person {
+  text-decoration: none;
+}
+
+/* ───── Live: what is going out right now ───── */
+.live {
+  margin-bottom: var(--space-xl);
+}
+.live-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: var(--space-md);
+}
+.live-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: var(--space-lg);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-card);
+  background: var(--color-paper-2);
+  transition: border-color var(--dur-micro) var(--ease-out);
+}
+.live-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px auto -1px -1px;
+  width: 2px;
+  border-radius: var(--radius-card) 0 0 var(--radius-card);
+  background: var(--color-cool);
+}
+.live-card.is-paused::before {
+  background: var(--color-accent);
+}
+.live-card:hover {
+  border-color: var(--color-rule-2);
+}
+.live-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+.live-name {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3xs);
+  min-width: 0;
+  text-align: left;
+}
+.live-name strong {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color var(--dur-micro) var(--ease-out);
+}
+.live-name:hover strong {
+  text-decoration-color: var(--color-rule-2);
+}
+.live-name small {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.live-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
+}
+.live-figure .num {
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+}
+.live-bar.big-progress {
+  height: 4px;
+  margin: 0;
+}
+.live-cells {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-md);
+  margin: 0;
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-rule);
+}
+.live-cells > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.live-cells dd {
+  font-size: 22px;
+}
+.live-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin-top: auto;
+}
+.live-foot .countdown.compact {
+  margin: 0;
+}
+.live-hint {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-muted);
+}
+
+/* steps: a numeral in place of an icon tile */
+.step-mark {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--color-rule-2);
+  border-radius: 50%;
+  font-size: 14px;
+  color: var(--color-ink);
+}
+.step-mark .icon {
+  width: 16px;
+  height: 16px;
+}
+.step.done .step-mark {
+  border-color: color-mix(in oklab, var(--color-ok) 35%, var(--color-paper-2));
+  background: var(--color-ok-soft);
+  color: var(--color-ok);
+}
+.step.next .step-mark {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+/* ledger: the record of every campaign */
+.ledger .campaign-name strong {
+  font-weight: 500;
+}
+th.t-num,
+td.t-num {
+  text-align: right;
+  font-family: var(--font-outlier);
+  font-variant-numeric: tabular-nums;
+}
+th.t-num {
+  font-family: var(--font-body);
+}
+
+/* ───── Numbers: a rack of lanes, one number to a row ───── */
+.number-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-card);
+  background: var(--color-paper-2);
+  overflow: hidden;
+}
+.number-card {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.1fr) minmax(200px, 1.2fr) minmax(260px, 1.7fr) minmax(220px, 1.2fr);
+  grid-template-areas:
+    "id today stats live"
+    "foot foot foot foot";
+  align-items: center;
+  gap: var(--space-md) var(--space-xl);
+  padding: var(--space-lg);
+  border: 0;
+  border-bottom: 1px solid var(--color-rule);
+  border-radius: 0;
+  background: transparent;
+  transition: background-color var(--dur-micro) var(--ease-out);
+}
+.number-card:last-child {
+  border-bottom: 0;
+}
+.number-card:hover {
+  background: var(--color-paper);
+}
+.number-card.is-off {
+  background: var(--color-paper);
+}
+.number-card.is-off .number-stats dd,
+.number-card.is-off .number-today strong {
+  color: var(--color-muted);
+}
+.number-card > header {
+  grid-area: id;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-xs);
+}
+.number-card .number-today {
+  grid-area: today;
+}
+.number-card .number-stats {
+  grid-area: stats;
+}
+.number-card .lane-live {
+  grid-area: live;
+  min-width: 0;
+}
+.number-card .lane-live:empty::before {
+  content: "Готов к отправке";
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.number-card .number-foot {
+  grid-area: foot;
+  margin: 0;
+  padding-top: var(--space-md);
+}
+.number-card > .lane-live > .countdown {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.number-card .number-note {
+  margin: 0;
+}
+
+/* ───── Base: the lists, with the format beside them ───── */
+.base-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  align-items: start;
+  gap: var(--space-lg);
+}
+.base-layout .import-guide {
+  position: sticky;
+  top: calc(var(--bar, 0px) + var(--space-lg));
+  margin: 0;
+  padding: var(--space-lg);
+  font-size: 14px;
+  line-height: 1.55;
+  background: var(--color-paper);
+}
+.base-layout .import-guide h2 {
+  font-size: var(--text-md);
+}
+.base-layout .import-guide ol {
+  padding-left: var(--space-md);
+}
+
+/* ───── Templates: each text as the message it will be ───── */
+.tpl-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+}
+.tpl-card {
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+.tpl-card h3 {
+  font-size: var(--text-md);
+  font-weight: 600;
+  padding: 0 var(--space-2xs);
+}
+.tpl-chat {
+  display: flex;
+  flex: 1;
+  padding: var(--space-md);
+  border-radius: var(--radius-pill);
+  background: var(--color-paper-3);
+}
+.tpl-chat .tpl-text {
+  margin-left: auto;
+  max-width: 88%;
+  max-height: none;
+  overflow: visible;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid color-mix(in oklab, var(--color-cool) 22%, var(--color-paper-2));
+  border-radius: var(--radius-card) var(--radius-card) 2px var(--radius-card);
+  background: var(--color-cool-soft);
+  color: var(--color-ink);
+  flex: none;
+  align-self: flex-start;
+}
+
+/* ───── Chats ───── */
+.chats {
+  height: calc(100vh - var(--bar, 64px) - 190px);
+}
+
+/* ───── Transitions between screens ─────
+   The current-page mark slides along the bar to its new place; the screen itself
+   gives way, and the new one's blocks rise in order. Only on navigation: the class
+   comes off after the entrance, so the ten-second refresh never replays it. */
+::view-transition-old(root) {
+  animation: screen-out var(--dur-short) var(--ease-in) both;
+}
+::view-transition-new(root) {
+  animation: screen-in var(--dur-long) var(--ease-out) both;
+}
+::view-transition-group(nav-current) {
+  animation-duration: var(--dur-long);
+  animation-timing-function: var(--ease-out);
+}
+@keyframes screen-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes screen-in {
+  from {
+    opacity: 0;
+  }
+}
+#main.is-entering > * {
+  animation: rise var(--dur-long) var(--ease-out) both;
+}
+#main.is-entering > *:nth-child(2) { animation-delay: 50ms; }
+#main.is-entering > *:nth-child(3) { animation-delay: 100ms; }
+#main.is-entering > *:nth-child(4) { animation-delay: 150ms; }
+#main.is-entering > *:nth-child(5) { animation-delay: 200ms; }
+#main.is-entering > *:nth-child(n + 6) { animation-delay: 250ms; }
+#main.is-entering .live-card,
+#main.is-entering .number-card,
+#main.is-entering .tpl-card {
+  animation: rise var(--dur-long) var(--ease-out) both;
+}
+#main.is-entering .live-card:nth-child(2),
+#main.is-entering .number-card:nth-child(2),
+#main.is-entering .tpl-card:nth-child(2) { animation-delay: 120ms; }
+#main.is-entering .live-card:nth-child(3),
+#main.is-entering .number-card:nth-child(3),
+#main.is-entering .tpl-card:nth-child(3) { animation-delay: 180ms; }
+#main.is-entering .number-card:nth-child(n + 4),
+#main.is-entering .tpl-card:nth-child(n + 4) { animation-delay: 240ms; }
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+/* ───── Narrow screens ───── */
+@media (max-width: 1180px) {
+  .number-card {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "id today"
+      "stats live"
+      "foot foot";
+  }
+}
+@media (max-width: 960px) {
+  .today {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .today-main {
+    border-right: 0;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .base-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .base-layout .import-guide {
+    position: static;
+  }
+}
+@media (max-width: 640px) {
+  .page-heading {
+    padding-bottom: var(--space-md);
+  }
+  .today-cells {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .today-cells > * {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    border-right: 0;
+    border-bottom: 1px solid var(--color-rule);
+  }
+  .today-cells > *:last-child {
+    border-bottom: 0;
+  }
+  .today-cells dd {
+    font-size: 24px;
+  }
+  .live-cells {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .live-figure .num {
+    font-size: 36px;
+  }
+  .number-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "id" "today" "stats" "live" "foot";
+    padding: var(--space-md);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+  #main.is-entering > *,
+  #main.is-entering .live-card,
+  #main.is-entering .number-card,
+  #main.is-entering .tpl-card {
+    animation: none;
   }
 }
