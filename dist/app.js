@@ -143,7 +143,7 @@ function button(text, ic, act, cls = "", attrs = "") {
   return `<button type="button" class="button ${cls}" data-act="${act}" ${attrs}>${ic ? icon(ic) : ""}${text}</button>`;
 }
 function heading(title, subtitle, actions = "", eyebrow = "") {
-  return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p>${subtitle}</p></div><div class="heading-actions">${actions}</div></div>`;
+  return `<div class="page-heading"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1>${subtitle ? `<p>${subtitle}</p>` : ""}</div><div class="heading-actions">${actions}</div></div>`;
 }
 
 const empty = (ic, title, text) =>
@@ -198,7 +198,7 @@ function campaignsPage() {
   return (
     heading(
       "Рассылки",
-      "Подключите номер, загрузите базу и запустите — остальное система сделает сама.",
+      "",
       button("Написать сообщение", "message", "manual-message") +
         button("Новая рассылка", "plus", "campaign-new", "primary"),
     ) +
@@ -216,7 +216,7 @@ function campaignsPage() {
             "Рассылок пока нет",
             "Нажмите «Новая рассылка» — это займёт пару минут.",
           )
-    }</section><p class="page-note">${icon("shield")}Система сама делает паузы между сообщениями, соблюдает дневные лимиты и не пишет тем, кто ответил «СТОП».</p>`
+    }</section>`
   );
 }
 // Перерыв между сообщениями в минутах: «от» и «до», выбирается случайно в этих границах
@@ -486,7 +486,7 @@ function templatesPage() {
   return (
     heading(
       "Шаблоны",
-      "Готовые тексты: выберите подходящий, замените текст в [скобках] своим — и запускайте.",
+      "",
       button("Новый шаблон", "plus", "template-new", "primary"),
     ) +
     (data.templates.length
@@ -536,14 +536,14 @@ function numbersPage() {
   return (
     heading(
       "WhatsApp-номера",
-      "Подключите номера, с которых будете отправлять сообщения.",
+      "",
       button("Написать сообщение", "message", "manual-message", "primary") +
         button("Подключить номер", "plus", "connect-number"),
     ) +
     (rows.length
       ? `<div class="metrics">${metric("Номеров в работе", "phone", `${num(ready.length)} из ${num(rows.length)}`, ready.length === rows.length ? "Все номера подключены" : "Остальные выключены или не подключены")}${metric("Отправлено сегодня", "send", num(sum("sent_today")), `Лимит на сегодня: ${num(sum("limit_today", ready))}`)}${metric("Отправлено всего", "checkCircle", num(sum("sent_total")), `Доставлено: ${num(sum("delivered_total"))}`)}${metric("Ответили", "message", num(sum("replied_total")), `Не доставлено: ${num(sum("failed_total"))}`)}</div><div class="number-grid">${rows.map(numberCard).join("")}</div>`
       : `<section class="panel">${empty("phone", "Подключите первый номер", "Нажмите «Подключить номер» и наведите камеру телефона на код на экране. Номеров можно подключить несколько.")}</section>`) +
-    `<p class="page-note">${icon("qr")}Можно подключить несколько номеров — рассылка распределится между ними сама, и пойдёт быстрее.</p><p class="page-note"><button type="button" class="link-button" data-act="instance-new">Добавить подключение GREEN-API вручную</button></p>`
+    `<p class="page-note"><button type="button" class="link-button" data-act="instance-new">Добавить подключение GREEN-API вручную</button></p>`
   );
 }
 function basePage() {
@@ -551,7 +551,7 @@ function basePage() {
   return (
     heading(
       "База для рассылки",
-      "Добавьте получателей из Excel или Google Таблицы.",
+      "",
       button("Загрузить Excel", "upload", "import", "primary") +
         button("Добавить Google Таблицу", "plus", "import-google"),
     ) +
