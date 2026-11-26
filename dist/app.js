@@ -351,10 +351,10 @@ function tickCountdowns() {
       done || !pause ? 1 : Math.min(1, Math.max(0, 1 - left / pause)),
     );
     el.querySelector(".countdown-time").textContent = done ? "" : mmss(left);
-    el.querySelector(".countdown-caption").textContent = done
+    el.querySelector(".countdown-caption").innerHTML = done
       ? "Отправляем сообщение…"
       : el.classList.contains("compact")
-        ? `${"long" in el.dataset ? "Номер отдыхает, следующее" : "Следующее сообщение"} через ${mmss(left)}`
+        ? `${"long" in el.dataset ? "Номер отдыхает, следующее" : "Следующее сообщение"} через <span class="tick">${mmss(left)}</span>`
         : "long" in el.dataset
           ? "длинный отдых номера — защита от блокировки"
           : "до следующего сообщения";
@@ -516,16 +516,21 @@ function numberCard(i) {
   const note = !on
     ? "Номер не подключён — сообщения с него не уходят."
     : !i.enabled
-      ? `Выключен${i.disabled_reason ? `: ${esc(i.disabled_reason)}` : ""}. Сообщения с него не уходят.`
+      ? `${!i.disabled_reason || i.disabled_reason === "Выключен вручную" ? "Выключен вручную" : `Выключен: ${esc(i.disabled_reason)}`}. Сообщения с него не уходят.`
       : i.sent_today >= i.limit_today
         ? "Лимит на сегодня выбран — продолжит завтра."
         : "";
+  const pace =
+    on && i.enabled && i.next_send_at
+      ? `<div class="countdown pace" data-next-at="${i.next_send_at}" data-pause="${i.pause_ms || 0}"${i.long_rest ? " data-long" : ""}><span class="countdown-ring" aria-hidden="true"></span><span class="countdown-caption"></span><span class="countdown-time"></span></div>`
+      : "";
+  const stat = (label, value) =>
+    `<div><dt>${label}</dt><dd>${num(value)}</dd></div>`;
   return `<article class="number-card${on && i.enabled ? "" : " is-off"}" data-number="${i.id}">
-<header><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span class="mail-tile">${icon("phone")}</span><span><strong>${esc(i.name)}</strong><small>${i.phone ? phoneFmt(i.phone) : "Ждёт подключения"}</small></span></button>${badge(instanceStates, i.state)}</header>
-<div class="number-today"><div class="progress-caption"><span>Сегодня отправлено</span><strong>${num(i.sent_today)} из ${num(i.limit_today)}</strong></div><div class="big-progress"><span style="width:${share(i.sent_today, i.limit_today)}%"></span></div></div>
-<dl class="number-stats"><div><dt>Отправлено</dt><dd>${num(i.sent_total)}</dd></div><div><dt>Доставлено</dt><dd>${num(i.delivered_total)}</dd></div><div><dt>Прочитано</dt><dd>${num(i.read_total)}</dd></div><div><dt>Ответили</dt><dd>${num(i.replied_total)}</dd></div></dl>
-${note ? `<p class="number-note">${note}</p>` : ""}${on && i.enabled ? countdown(i, "Перерыв между сообщениями") : ""}
-<div class="number-foot">${on ? `<label class="switch"><input type="checkbox" data-toggle-number="${i.id}" ${i.enabled ? "checked" : ""}/><span class="switch-track"></span><span>${i.enabled ? "Участвует в рассылках" : "Не участвует в рассылках"}</span></label>` : a("Подключить по QR", "qr", "instance-qr", "primary compact")}<div class="row-actions">${on && i.enabled ? a("Написать", "message", "manual-message", "compact") : ""}${a("Подробнее", null, "instance-open", "compact")}</div></div>
+<header><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span><strong>${esc(i.name)}</strong><small>${i.phone ? phoneFmt(i.phone) : "Ждёт подключения"}</small></span></button>${badge(instanceStates, i.state)}</header>
+<div class="number-today"><span class="number-today-label">Сегодня отправлено</span><p class="number-today-figure"><strong>${num(i.sent_today)}</strong><span>из ${num(i.limit_today)}</span><span class="number-left">${i.sent_today >= i.limit_today ? "лимит выбран" : `осталось ${num(i.limit_today - i.sent_today)}`}</span></p><div class="big-progress" role="progressbar" aria-valuemin="0" aria-valuemax="${i.limit_today}" aria-valuenow="${i.sent_today}" aria-label="Дневной лимит"><span style="width:${share(i.sent_today, i.limit_today)}%"></span></div>${pace}${note ? `<p class="number-status">${note}</p>` : ""}</div>
+<dl class="number-stats">${stat("Отправлено", i.sent_total)}${stat("Доставлено", i.delivered_total)}${stat("Прочитано", i.read_total)}${stat("Ответили", i.replied_total)}</dl>
+<div class="number-foot">${on ? `<label class="switch"><input type="checkbox" data-toggle-number="${i.id}" ${i.enabled ? "checked" : ""}/><span class="switch-track"></span><span>${i.enabled ? "В рассылках" : "Не в рассылках"}</span></label>` : a("Подключить по QR", "qr", "instance-qr", "primary compact")}<div class="row-actions">${on && i.enabled ? `<button type="button" class="icon-button" data-act="manual-message" data-id="${i.id}" aria-label="Написать с этого номера" title="Написать с этого номера">${icon("message")}</button>` : ""}${a("Подробнее", null, "instance-open", "compact text")}</div></div>
 </article>`;
 }
 function numbersPage() {
@@ -674,9 +679,23 @@ function qrDialog(id) {
   poll();
 }
 
+// Подсказка о формате файла: свёрнута, раскрывается по клику
+let guideOpen = false;
 function importGuide() {
-  return `<section class="panel import-guide" aria-label="Как подготовить базу"><h2>Единый формат базы</h2><ol><li>Скачайте шаблон Excel <strong>.xlsx</strong>. Оставьте один лист с названием <strong>Контакты</strong>.</li><li>Не меняйте первую строку и порядок колонок: <strong>A — Телефон, B — Имя, C — Город</strong>. Вторая строка и ниже — получатели, по одному в строке. Имя и город можно оставить пустыми.</li><li>В колонке A укажите номер с кодом страны: <strong>+7 701 123 45 67</strong>, <strong>8 701 123 45 67</strong> или <strong>+998 90 123 45 67</strong>. Пробелы и скобки допустимы. Формулы и два номера в одной ячейке не используйте.</li><li>Нажмите <strong>Проверить базу</strong>. Система покажет количество получателей и первые 10 номеров. Если есть пустые или некорректные телефоны, исправьте файл и проверьте снова. Только после проверки появится кнопка сохранения базы.</li></ol><div class="table-scroll"><table class="import-example"><caption>Пример строк на листе «Контакты»</caption><thead><tr><th>A · Телефон</th><th>B · Имя</th><th>C · Город</th></tr></thead><tbody><tr><td>+7 701 123 45 67</td><td>Айгуль</td><td>Алматы</td></tr><tr><td>8 705 123 45 68</td><td>Нурлан</td><td>Астана</td></tr></tbody></table></div><p>Повторяющиеся номера попадут в базу один раз. Отписавшиеся не попадут в список получателей. Для текста сообщения можно использовать <strong>{имя}</strong> и <strong>{город}</strong>.</p><a class="button import-template-link" href="/template-contacts.xlsx" download="template-contacts.xlsx">${icon("download")}Скачать шаблон Excel</a></section>`;
+  return `<div class="hint-bar"><details class="hint" id="format-hint"${guideOpen ? " open" : ""}><summary>${icon("help")}Как подготовить файл</summary><div class="hint-body import-guide" role="note"><ol><li>Один лист <strong>Контакты</strong>. Первая строка — заголовки: <strong>A — Телефон, B — Имя, C — Город</strong>. Имя и город можно не заполнять</li><li>Номер с кодом страны: <strong>+7 701 123 45 67</strong>, <strong>8 701 123 45 67</strong> или <strong>+998 90 123 45 67</strong>. Один номер в ячейке, без формул</li><li>Нажмите <strong>Проверить базу</strong> — сохранить можно только после проверки</li></ol><div class="table-scroll"><table class="import-example"><thead><tr><th>A · Телефон</th><th>B · Имя</th><th>C · Город</th></tr></thead><tbody><tr><td>+7 701 123 45 67</td><td>Айгуль</td><td>Алматы</td></tr><tr><td>8 705 123 45 68</td><td>Нурлан</td><td>Астана</td></tr></tbody></table></div><p>Повторы и отписавшиеся в рассылку не попадут. В тексте сообщения работают <strong>{имя}</strong> и <strong>{город}</strong>.</p></div></details><a class="button text compact" href="/template-contacts.xlsx" download="template-contacts.xlsx">${icon("download")}Скачать шаблон Excel</a></div>`;
 }
+document.addEventListener(
+  "toggle",
+  (e) => {
+    if (e.target.id === "format-hint" && e.target.closest("main"))
+      guideOpen = e.target.open;
+  },
+  true,
+);
+document.addEventListener("click", (e) => {
+  const hint = document.querySelector("main #format-hint[open]");
+  if (hint && !hint.contains(e.target)) hint.open = false;
+});
 
 function googleImportDialog() {
   dialogState = { kind: "form" };
@@ -905,7 +924,7 @@ async function connectNumber() {
     return addConnectionDialog("fields", e.message);
   }
   // свободных подключений нет — сразу предлагаем добавить новое
-  if (inst.full) return addConnectionDialog("fields");
+  if (inst.full) return addConnectionDialog("fields", inst.message);
   await refresh();
   qrDialog(inst.id);
 }
