@@ -2,7 +2,8 @@
 // Воркер очереди. Антибан: у каждого номера своя пауза (nextAt) и флаг «занят»,
 // дневной лимит с прогревом, окно отправки по TZ_NAME, автостоп при тревожных сигналах.
 const { db, logEvent } = require('./db');
-const { client } = require('./greenapi');
+const { client, GreenApiError } = require('./greenapi');
+const monitoring = require('./monitoring');
 const { dayInTz, hourInTz, daysBetween, renderTemplate, randInt } = require('./util');
 
 const MIN_DELAY_SEC = Math.max(0, Number(process.env.MIN_DELAY_SEC ?? 5));
@@ -72,6 +73,8 @@ async function stopInstance(id, reason) {
   if (r.changes) {
     const inst = await db.prepare('SELECT name FROM instances WHERE id = ?').get(id);
     await logEvent(`Номер «${inst?.name || id}» остановлен: ${reason}`, 'error', id);
+    // номер выбыл — рассылка замедлилась или встала, об этом нужно узнать сразу
+    monitoring.captureEvent(`Номер «${inst?.name || id}» остановлен автостопом`, 'warning', 'instance-stop', { instanceId: id, reason });
   }
   resetInstance(id);
 }
@@ -159,6 +162,8 @@ async function processMessage(inst, camp, msg) {
   } catch (e) {
     const status = e.status;
     const text = String(e.message || e).slice(0, 500);
+    // ошибки GREEN-API — штатная работа очереди; всё остальное (БД, баг в коде) — в Sentry
+    if (!(e instanceof GreenApiError)) monitoring.captureError(e, 'worker-send', { instanceId: inst.id, campaignId: camp.id, messageId: msg.id });
     if (status === 466) {
       await qRequeue.run(text, msg.id);
       await stopInstance(inst.id, 'Исчерпан тариф GREEN-API (466)');
@@ -206,6 +211,7 @@ async function tick() {
       s.busy = true;
       processMessage(inst, camp, msg).
       catch(async (e) => {
+        monitoring.captureError(e, 'worker', { instanceId: inst.id, campaignId: camp.id, messageId: msg.id });
         await qRequeue.run(String(e.message || e).slice(0, 500), msg.id);
         await logEvent(`Сбой воркера: ${e.message}`, 'error', inst.id);
         s.nextAt = Date.now() + RETRY_DELAY_SEC * 1000;
@@ -243,7 +249,10 @@ async function applyState(id, state, phone) {
 
 async function pollStates() {
   const insts = await db.prepare('SELECT * FROM instances').all();
-  await Promise.all(insts.map((i) => refreshInstance(i).catch(() => {})));
+  await Promise.all(insts.map((i) => refreshInstance(i).catch((e) => {
+    // недоступность GREEN-API здесь обычна (опрос раз в минуту), а остальное — сбой
+    if (!(e instanceof GreenApiError)) monitoring.captureError(e, 'poll-states', { instanceId: i.id });
+  })));
 }
 
 let timers = [];
@@ -251,9 +260,10 @@ async function start() {
   // при старте сервера все «sending» возвращаем в очередь
   const r = await db.prepare("UPDATE messages SET status = 'pending' WHERE status = 'sending'").run();
   if (r.changes) await logEvent(`После перезапуска возвращено в очередь: ${r.changes}`, 'warn');
-  timers.push(setInterval(() => tick().catch((e) => console.error('tick', e)), TICK_MS));
-  timers.push(setInterval(() => pollStates().catch(() => {}), POLL_SEC * 1000));
-  pollStates().catch(() => {});
+  timers.push(setInterval(() => tick().catch((e) => {console.error('tick', e);monitoring.captureError(e, 'worker-tick');}), TICK_MS));
+  const poll = () => pollStates().catch((e) => monitoring.captureError(e, 'poll-states'));
+  timers.push(setInterval(poll, POLL_SEC * 1000));
+  poll();
 }
 function stop() {
   timers.forEach(clearInterval);
