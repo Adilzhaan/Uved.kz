@@ -1,4 +1,5 @@
 "use strict";
+document.documentElement.classList.add("js");
 const paths = {
   send: "m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13",
   users:
@@ -129,7 +130,7 @@ const campaignStatuses = {
 };
 const badge = (map, key) => {
   const s = map[key] || [key || "—", ""];
-  return `<span class="badge ${s[1]}"><i></i>${esc(s[0])}</span>`;
+  return `<span class="badge ${s[1]}">${esc(s[0])}</span>`;
 };
 
 let toastTimer;
@@ -210,7 +211,7 @@ function campaignsPage() {
         ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название</th><th>Статус</th><th>Отправлено</th><th>Ответили</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows
             .map((c) => {
               const st = c.stats;
-              return `<tr><td><button class="campaign-name" data-act="campaign-open" data-id="${c.id}"><span class="mail-tile">${icon("send")}</span><span style="text-align:left"><strong>${esc(c.name)}</strong><small>${esc(listName(c))}</small></span></button></td><td data-label="Статус">${badge(campaignStatuses, c.status)}${campaignNext(c)}</td><td data-label="Отправлено">${c.status === "draft" ? '<span class="muted">ещё не запускалась</span>' : `<span class="progress-cell"><strong>${num(st.sent)} из ${num(st.total)}</strong><span class="mini-progress"><span style="width:${donePercent(st)}%"></span></span></span>`}</td><td data-label="Ответили">${st.sent ? num(st.replied) : "—"}</td><td class="connection-actions"><div class="row-actions">${button("Открыть", null, "campaign-open", "compact", `data-id="${c.id}"`)}</div></td></tr>`;
+              return `<tr><td><button class="campaign-name" data-act="campaign-open" data-id="${c.id}"><span class="mail-tile">${icon("send")}</span><span style="text-align:left"><strong>${esc(c.name)}</strong><small>${esc(listName(c))}</small></span></button></td><td data-label="Статус">${badge(campaignStatuses, c.status)}${campaignNext(c)}</td><td data-label="Отправлено">${c.status === "draft" ? '<span class="muted">ещё не запускалась</span>' : `<span class="progress-cell"><strong>${num(st.sent)} из ${num(st.total)}</strong><span class="mini-progress"><span style="--p:${donePercent(st)}"></span></span></span>`}</td><td data-label="Ответили">${st.sent ? num(st.replied) : "—"}</td><td class="connection-actions"><div class="row-actions">${button("Открыть", null, "campaign-open", "compact", `data-id="${c.id}"`)}</div></td></tr>`;
             })
             .join("")}</tbody></table></div>`
         : empty(
@@ -477,7 +478,7 @@ function campaignDetail(id) {
     `${badge(campaignStatuses, c.status)} <span class="muted">${esc(listName(c))}</span>${
       c.status === "draft"
         ? `<div class="info-box">Это черновик — сообщения ещё не отправлялись.</div>`
-        : `<div class="stat-grid">${cells.map(([v, l]) => `<div><strong>${num(v)}</strong><small>${l}</small></div>`).join("")}</div><div class="big-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${donePercent(st)}" aria-label="Обработано"><span style="width:${donePercent(st)}%"></span></div><div class="progress-caption"><span>Обработано ${donePercent(st)}%</span><span>${extra}</span></div>${hint ? `<div class="info-box">${hint}</div>` : ""}${campaignCountdowns(c)}${["running", "paused"].includes(c.status) ? `<form id="pace-form" class="pace-form" data-id="${c.id}"><strong>Перерыв между сообщениями</strong>${paceSelects(c, "d-pace")}<button type="submit" class="button compact">Применить</button></form>` : ""}`
+        : `<div class="stat-grid">${cells.map(([v, l]) => `<div><strong>${num(v)}</strong><small>${l}</small></div>`).join("")}</div><div class="big-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${donePercent(st)}" aria-label="Обработано"><span style="--p:${donePercent(st)}"></span></div><div class="progress-caption"><span>Обработано ${donePercent(st)}%</span><span>${extra}</span></div>${hint ? `<div class="info-box">${hint}</div>` : ""}${campaignCountdowns(c)}${["running", "paused"].includes(c.status) ? `<form id="pace-form" class="pace-form" data-id="${c.id}"><strong>Перерыв между сообщениями</strong>${paceSelects(c, "d-pace")}<button type="submit" class="button compact">Применить</button></form>` : ""}`
     }${(c.extra_texts || []).length ? `<p class="variant-note">Вариантов текста: ${c.extra_texts.length + 1}. Каждому получателю уходит один из них.</p>` : ""}<div class="preview-email">${esc(c.text) || '<span class="muted">Без текста</span>'}</div>${(c.extra_texts || []).map((t) => `<div class="preview-email">${esc(t)}</div>`).join("")}${c.status === "draft" ? "" : `<div class="actions-row" style="margin-top:16px"><a class="button compact" href="/api/campaigns/${c.id}/export.csv" download>${icon("download")}Скачать отчёт (CSV)</a></div>`}`,
     footer,
   );
@@ -522,7 +523,7 @@ function numberCard(i) {
         : "";
   return `<article class="number-card${on && i.enabled ? "" : " is-off"}" data-number="${i.id}">
 <header><button class="campaign-name" data-act="instance-open" data-id="${i.id}"><span class="mail-tile">${icon("phone")}</span><span><strong>${esc(i.name)}</strong><small>${i.phone ? phoneFmt(i.phone) : "Ждёт подключения"}</small></span></button>${badge(instanceStates, i.state)}</header>
-<div class="number-today"><div class="progress-caption"><span>Сегодня отправлено</span><strong>${num(i.sent_today)} из ${num(i.limit_today)}</strong></div><div class="big-progress"><span style="width:${share(i.sent_today, i.limit_today)}%"></span></div></div>
+<div class="number-today"><div class="progress-caption"><span>Сегодня отправлено</span><strong>${num(i.sent_today)} из ${num(i.limit_today)}</strong></div><div class="big-progress"><span style="--p:${share(i.sent_today, i.limit_today)}"></span></div></div>
 <dl class="number-stats"><div><dt>Отправлено</dt><dd>${num(i.sent_total)}</dd></div><div><dt>Доставлено</dt><dd>${num(i.delivered_total)}</dd></div><div><dt>Прочитано</dt><dd>${num(i.read_total)}</dd></div><div><dt>Ответили</dt><dd>${num(i.replied_total)}</dd></div></dl>
 ${note ? `<p class="number-note">${note}</p>` : ""}${on && i.enabled ? countdown(i, "Перерыв между сообщениями") : ""}
 <div class="number-foot">${on ? `<label class="switch"><input type="checkbox" data-toggle-number="${i.id}" ${i.enabled ? "checked" : ""}/><span class="switch-track"></span><span>${i.enabled ? "Участвует в рассылках" : "Не участвует в рассылках"}</span></label>` : a("Подключить по QR", "qr", "instance-qr", "primary compact")}<div class="row-actions">${on && i.enabled ? a("Написать", "message", "manual-message", "compact") : ""}${a("Подробнее", null, "instance-open", "compact")}</div></div>
@@ -807,7 +808,7 @@ function renderDock() {
     .slice(0, 3)
     .map((c) => {
       const st = c.stats;
-      return `<button type="button" class="dock-item" data-act="campaign-open" data-id="${c.id}" title="Открыть рассылку"><span class="dock-top"><span class="dock-dot"></span><strong>${esc(c.name)}</strong><span class="dock-count">${num(st.sent)} из ${num(st.total)}</span></span><span class="mini-progress"><span style="width:${donePercent(st)}%"></span></span>${campaignNext(c) || `<small class="dock-note">${st.queue ? "Ждёт своей очереди" : "Завершается…"}</small>`}</button>`;
+      return `<button type="button" class="dock-item" data-act="campaign-open" data-id="${c.id}" title="Открыть рассылку"><span class="dock-top"><strong>${esc(c.name)}</strong><span class="dock-count">${num(st.sent)} из ${num(st.total)}</span></span><span class="mini-progress"><span style="--p:${donePercent(st)}"></span></span>${campaignNext(c) || `<small class="dock-note">${st.queue ? "Ждёт своей очереди" : "Завершается…"}</small>`}</button>`;
     })
     .join("");
 }

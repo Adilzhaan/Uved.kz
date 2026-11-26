@@ -1,0 +1,39 @@
+/* Hallmark · Console, colourway paper (light), faces swapped for Cyrillic: Onest for Host Grotesk, JetBrains Mono for Atkinson Hyperlegible Mono */
+@font-face { font-family: "Onest"; font-style: normal; font-display: swap; font-weight: 100 900; src: url("/fonts/onest-cyrillic-wght-normal.woff2") format("woff2-variations"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest"; font-style: normal; font-display: swap; font-weight: 100 900; src: url("/fonts/onest-latin-wght-normal.woff2") format("woff2-variations"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-display: swap; font-weight: 100 800; src: url("/fonts/jetbrains-mono-cyrillic-wght-normal.woff2") format("woff2-variations"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-display: swap; font-weight: 100 800; src: url("/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+:root {
+  color-scheme: light;
+  --space-3xs: 2px; --space-2xs: 4px; --space-xs: 8px; --space-sm: 12px; --space-md: 16px; --space-lg: 24px; --space-xl: 40px; --space-2xl: 64px; --space-3xl: 96px; --space-4xl: 144px;
+  --text-xs: 0.75rem; --text-sm: 0.875rem; --text-md: 1rem; --text-lg: 1.125rem; --text-xl: 1.266rem; --text-2xl: 1.424rem; --text-3xl: 1.602rem;
+  --text-display-s: 1.424rem; --text-display: 1.602rem; --text-section: 1.125rem; --text-title: 1rem; --text-lead: 1rem;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); --ease-in: cubic-bezier(0.7, 0, 0.84, 0); --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms; --dur-short: 220ms; --dur-long: 420ms;
+  --container: 1440px; --gutter: 64px; --gap-columns: 32px;
+  --z-base: 1; --z-raised: 10; --z-dropdown: 100; --z-sticky: 200; --z-sticky-nav: 300; --z-modal: 400; --z-toast: 500; --z-tooltip: 600;
+
+  /* ground in three steps: the page, a panel lifted from it, an inset well */
+  --color-paper: oklch(97.6% 0.006 85); --color-paper-2: oklch(99.4% 0.003 85); --color-paper-3: oklch(95% 0.008 80);
+  --color-ink: oklch(21% 0.012 60); --color-ink-2: oklch(36% 0.012 60); --color-muted: oklch(49% 0.012 60);
+  --color-rule: oklch(90.5% 0.008 75); --color-rule-2: oklch(80% 0.01 70);
+  /* amber is a person: the operator's one primary action, a reply, a chat */
+  --color-accent: oklch(56% 0.135 68); --color-accent-deep: oklch(50% 0.13 66); --color-accent-ink: oklch(99% 0.005 85);
+  --color-accent-soft: oklch(94% 0.04 80); --color-accent-text: oklch(47% 0.12 62);
+  /* cool is the instrument: sent, delivered, read, a progress fill, the current place */
+  --color-cool: oklch(51% 0.14 252); --color-cool-soft: oklch(94.5% 0.025 250); --color-cool-text: oklch(46% 0.14 252);
+  --color-ok: oklch(50% 0.12 150); --color-ok-soft: oklch(94.5% 0.035 150);
+  --color-bad: oklch(53% 0.18 27); --color-bad-soft: oklch(95% 0.025 27);
+  --color-focus: oklch(51% 0.14 252);
+  --color-field: oklch(62% 0.012 65); --color-qr: oklch(100% 0 0);
+  --color-scrim: oklch(21% 0.012 60 / 0.32);
+  --color-error: var(--color-bad); --color-success: var(--color-ok);
+
+  --font-display: "Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; --font-body: var(--font-display);
+  --font-outlier: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --radius-card: 10px; --radius-pill: 6px; --radius-tag: 4px; --rule-hair: 1px;
+  --shadow-card: none;
+  --shadow-pop: 0 1px 0 var(--color-rule), 0 12px 32px oklch(21% 0.012 60 / 0.10);
+  --tracking-display: -0.025em; --display-weight: 560;
+}
