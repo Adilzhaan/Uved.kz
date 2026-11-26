@@ -528,11 +528,6 @@ ${note ? `<p class="number-note">${note}</p>` : ""}${on && i.enabled ? countdown
 }
 function numbersPage() {
   const rows = data.instances;
-  const ready = rows.filter(isReady);
-  const sum = (key, list = rows) =>
-    list.reduce((n, i) => n + Number(i[key] || 0), 0);
-  const metric = (label, ic, value, bottom) =>
-    `<div class="metric"><div class="metric-label">${label}<span class="metric-icon">${icon(ic)}</span></div><div class="metric-value">${value}</div><div class="metric-bottom">${bottom}</div></div>`;
   return (
     heading(
       "WhatsApp-номера",
@@ -541,7 +536,7 @@ function numbersPage() {
         button("Подключить номер", "plus", "connect-number"),
     ) +
     (rows.length
-      ? `<div class="metrics">${metric("Номеров в работе", "phone", `${num(ready.length)} из ${num(rows.length)}`, ready.length === rows.length ? "Все номера подключены" : "Остальные выключены или не подключены")}${metric("Отправлено сегодня", "send", num(sum("sent_today")), `Лимит на сегодня: ${num(sum("limit_today", ready))}`)}${metric("Отправлено всего", "checkCircle", num(sum("sent_total")), `Доставлено: ${num(sum("delivered_total"))}`)}${metric("Ответили", "message", num(sum("replied_total")), `Не доставлено: ${num(sum("failed_total"))}`)}</div><div class="number-grid">${rows.map(numberCard).join("")}</div>`
+      ? `<div class="number-grid">${rows.map(numberCard).join("")}</div>`
       : `<section class="panel">${empty("phone", "Подключите первый номер", "Нажмите «Подключить номер» и наведите камеру телефона на код на экране. Номеров можно подключить несколько.")}</section>`) +
     `<p class="page-note"><button type="button" class="link-button" data-act="instance-new">Добавить подключение GREEN-API вручную</button></p>`
   );
