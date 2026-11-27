@@ -6,3 +6,8 @@ test-results/
 .env
 data/
 test-*.xlsx
+
+# Локальные инструменты Claude Code
+.claude/
+skills-lock.json
+.hallmark/

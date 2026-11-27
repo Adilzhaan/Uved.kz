@@ -15,6 +15,9 @@ const pool = new Pool({
   max: 10,
   connectionTimeoutMillis: 10000,
 });
+// Простаивающее соединение может оборваться (перезапуск базы, пулер Supabase). Без обработчика
+// событие error уронило бы весь процесс; пул сам заменит соединение при следующем запросе.
+pool.on('error', (e) => console.error('[db] соединение с базой оборвалось:', e.message));
 const scope = new AsyncLocalStorage();
 
 function compile(sql, args) {
@@ -59,15 +62,17 @@ const db = {
   transaction(fn) {
     return async (...args) => {
       const client = await pool.connect();
+      let broken = false;
       try {
         await client.query('BEGIN');
         const result = await scope.run(client, () => fn(...args));
         await client.query('COMMIT');
         return result;
       } catch (e) {
-        await client.query('ROLLBACK');
+        // если соединение умерло, ROLLBACK тоже не пройдёт: не даём ему подменить исходную ошибку
+        await client.query('ROLLBACK').catch(() => { broken = true; });
         throw e;
-      } finally { client.release(); }
+      } finally { client.release(broken); }
     };
   },
   close: () => pool.end(),

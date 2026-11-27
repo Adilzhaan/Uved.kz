@@ -55,14 +55,16 @@ function cellText(v) {
   if (v == null) return '';
   if (v instanceof Date) return v.toLocaleDateString('ru-RU');
   if (typeof v === 'number') return Number.isInteger(v) ? v.toFixed(0) : String(v);
-  return String(v).trim();
+  // нулевой символ PostgreSQL в тексте не принимает: из-за одной такой ячейки падал бы весь импорт
+  return String(v).replace(/\u0000/g, '').trim();
 }
 
 const isMobileLike = (p) => /^(7\d{10}|998\d{9})$/.test(p);
 
 /** Разбор файла: определение заголовка, колонки телефона, нормализация, дедупликация */
-function parseFile(buffer, filename) {
-  const rows = readRows(buffer, filename).filter((r) => r && r.some((c) => c !== '' && c != null));
+function parseFile(buffer, filename, fixed = null) {
+  // строка из одних пробелов — пустая: иначе хвост таблицы засчитывался бы как строки с ошибкой
+  const rows = (fixed?.rows || readRows(buffer, filename)).filter((r) => r && r.some((c) => cellText(c) !== ''));
   if (!rows.length) throw Object.assign(new Error('Файл пустой или не распознан'), { status: 400 });
 
   const width = rows.reduce((m, r) => Math.max(m, r.length), 0);
@@ -81,8 +83,18 @@ function parseFile(buffer, filename) {
     const p = normalizePhone(r[col]);
     return n + (p ? 1 : 0) + (p && isMobileLike(p) ? 1 : 0);
   }, 0);
-  let phoneCol = hasHeader ? headers.findIndex((h) => PHONE_HEADER.test(h)) : -1;
-  if (phoneCol >= 0 && sample.length && score(phoneCol) < sample.length * 0.5) phoneCol = -1; // «номер договора» и т.п.
+  // подходящих по названию колонок может быть несколько («Номер карты», «Телефон») — берём ту, где больше мобильных
+  let phoneCol = -1;
+  if (fixed) phoneCol = fixed.phoneCol;
+  else if (hasHeader) {
+    let best = 0;
+    headers.forEach((h, i) => {
+      if (!PHONE_HEADER.test(h)) return;
+      const s = score(i);
+      if (phoneCol < 0 || s > best) {best = s;phoneCol = i;}
+    });
+  }
+  if (!fixed && phoneCol >= 0 && sample.length && score(phoneCol) < sample.length * 0.5) phoneCol = -1; // «номер договора» и т.п.
   if (phoneCol < 0) {
     let best = 0;
     for (let i = 0; i < width; i++) {
@@ -91,7 +103,7 @@ function parseFile(buffer, filename) {
     }
   }
   if (phoneCol < 0) throw Object.assign(new Error('Не найдена колонка с телефонами'), { status: 400 });
-  const nameCol = hasHeader ? headers.findIndex((h, i) => i !== phoneCol && NAME_HEADER.test(h)) : -1;
+  const nameCol = fixed ? fixed.nameCol : hasHeader ? headers.findIndex((h, i) => i !== phoneCol && NAME_HEADER.test(h)) : -1;
 
   const seen = new Set();
   const contacts = [];
@@ -131,18 +143,21 @@ function parseStandardFile(buffer, filename) {
   if (wb.SheetNames.length !== 1 || wb.SheetNames[0] !== 'Контакты')
   throw Object.assign(new Error('В файле должен быть один лист с названием «Контакты»'), { status: 400 });
   const rows = XLSX.utils.sheet_to_json(wb.Sheets['Контакты'], { header: 1, raw: true, defval: '', blankrows: false });
-  const headers = (rows[0] || []).map(cellText);
-  if (headers.length !== 3 || headers[0] !== 'Телефон' || headers[1] !== 'Имя' || headers[2] !== 'Город')
+  // Excel нередко тянет за собой пустые отформатированные колонки справа — они не ошибка
+  const headers = (rows[0] || []).map((c) => cellText(c).toLowerCase());
+  while (headers.length && headers[headers.length - 1] === '') headers.pop();
+  if (headers.length !== 3 || headers[0] !== 'телефон' || headers[1] !== 'имя' || headers[2] !== 'город')
   throw Object.assign(new Error('Первая строка должна содержать ровно три колонки: Телефон, Имя, Город — в этом порядке'), { status: 400 });
   if (rows.slice(1).some((row) => row.slice(3).some((cell) => cellText(cell) !== '')))
   throw Object.assign(new Error('В шаблоне предусмотрены только три колонки: Телефон, Имя, Город'), { status: 400 });
-  return parseFile(buffer, filename);
+  // колонки заданы шаблоном жёстко: телефон всегда A, имя всегда B; файл повторно не читаем
+  return parseFile(buffer, filename, { rows: rows.map((r) => r.slice(0, 3)), phoneCol: 0, nameCol: 1 });
 }
 
 /** Импорт в базу пакетами, с привязкой к списку в одной транзакции. */
-async function importFile(buffer, filename, listName, parser = parseFile) {
+async function importFile(buffer, filename, listName, parser = parseFile, ready = null) {
   const t0 = Date.now();
-  const parsed = parser(buffer, filename);
+  const parsed = ready || parser(buffer, filename); // ready — уже разобранный файл, чтобы не читать его дважды
   if (!parsed.contacts.length) {
     throw Object.assign(new Error(`В файле нет валидных номеров (строк: ${parsed.rows})`), { status: 400 });
   }

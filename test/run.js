@@ -133,7 +133,7 @@ async function apiTests() {
   assert.strictEqual(list0[0].phone, '77001001');
   ok('QR авторизуется со второго запроса, phone подтянут');
   await call('PATCH', `/api/instances/${A.id}`, { daily_limit_start: 10, daily_limit_max: 10, warmup_step: 0 });
-  await call('PATCH', `/api/instances/${B.id}`, { enabled: false });
+  await call('PATCH', `/api/instances/${B.id}`, { enabled: false, daily_limit_start: 50, daily_limit_max: 500, warmup_step: 30 }); // прежние значения по умолчанию, на них рассчитаны сценарии ниже
 
   const previewForm = new FormData();
   previewForm.append('file', new Blob([standardXlsx([['+7 701 123 45 67', 'Айгуль', 'Алматы']])]), 'contacts.xlsx');
@@ -446,7 +446,7 @@ async function uiTests() {
     await page.waitForSelector('#qr-box .qr-steps');
     await page.waitForSelector('#qr-box:has-text("Подключено")', { timeout: 10000 });
     await page.click('dialog [data-act=close]');
-    await page.waitForSelector('tr:has-text("Номер 4") .badge:has-text("Подключён")');
+    await page.waitForSelector('.number-card:has-text("Номер 4") .badge:has-text("Подключён")');
     // лимит номеров (MAX_NUMBERS=4) — понятное сообщение вместо ошибки
     await page.click('.heading-actions [data-act=connect-number]');
     await page.waitForSelector('dialog:has-text("максимальное число номеров")');

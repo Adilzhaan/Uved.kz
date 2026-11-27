@@ -16,7 +16,7 @@ const BAD_STATES = new Set(['blocked', 'yellowCard']);
 const runtime = new Map(); // instance.id → { nextAt, busy, errors }
 function rt(id) {
   let s = runtime.get(id);
-  if (!s) runtime.set(id, s = { nextAt: 0, pauseMs: 0, busy: false, errors: 0, streak: 0, restAfter: 0, longRest: false });
+  if (!s) runtime.set(id, s = { nextAt: 0, pauseMs: 0, busy: false, errors: 0, streak: 0, restAfter: 0, longRest: false, primed: false });
   return s;
 }
 function resetInstance(id) {
@@ -24,6 +24,34 @@ function resetInstance(id) {
   s.errors = 0;
   s.nextAt = 0;
   s.pauseMs = 0;
+  s.longRest = false;
+  s.primed = false; // перерыв заново отсчитаем от последней реальной отправки номера
+}
+const qLastSent = db.prepare('SELECT MAX(sent_at) AS at FROM messages WHERE instance_id = ?');
+/**
+ * Память о перерывах живёт в процессе. После перезапуска сервера или включения номера
+ * отсчитываем перерыв от последнего реально отправленного сообщения, иначе номер
+ * отправил бы следующее сразу — два сообщения подряд без паузы.
+ */
+async function prime(inst, s, camp) {
+  const last = (await qLastSent.get(inst.id))?.at;
+  s.primed = true;
+  if (!last) return;
+  const pause = pickPauseMs(camp);
+  if (last + pause > Date.now()) {
+    s.pauseMs = pause;
+    s.nextAt = last + pause;
+  }
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Запись в базу с повторами: короткий обрыв связи с БД не должен ломать очередь */
+async function persist(fn, tries = 5) {
+  for (let i = 1; ; i++) {
+    try {return await fn();} catch (e) {
+      if (i >= tries) throw e;
+      await sleep(500 * i);
+    }
+  }
 }
 /** Перерыв после сообщения. От минуты и больше — целыми минутами: 2–4 мин → 2, 3 или 4 минуты */
 function pickPauseMs(camp) {
@@ -79,9 +107,11 @@ async function stopInstance(id, reason) {
   resetInstance(id);
 }
 
+// FOR UPDATE SKIP LOCKED и повторная проверка статуса: одно сообщение не достанется двум номерам
 const qClaim = db.prepare(`
   UPDATE messages SET status = 'sending', instance_id = ?
-  WHERE id = (SELECT id FROM messages WHERE campaign_id = ? AND status = 'pending' ORDER BY id LIMIT 1)
+  WHERE status = 'pending' AND id = (
+    SELECT id FROM messages WHERE campaign_id = ? AND status = 'pending' ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED)
   RETURNING *`);
 const qRequeue = db.prepare("UPDATE messages SET status = 'pending', error = ? WHERE id = ? AND status = 'sending'");
 const qFinal = db.prepare("UPDATE messages SET status = ?, error = ? WHERE id = ? AND status = 'sending'");
@@ -149,44 +179,59 @@ async function processMessage(inst, camp, msg) {
     await api.sendMessage(msg.phone, text);
     if (!r || !r.idMessage) throw new Error('GREEN-API не вернул idMessage');
 
+    // сообщение ушло: перерыв назначаем сразу, что бы ни случилось с записью в базу
     const now = Date.now();
     const today = dayInTz(now);
-    await db.transaction(async () => {
-      await qSent.run(String(r.idMessage), text, now, msg.id);
-      await qInc.run(inst.id, today);
-      await qFirstDay.run(today, inst.id);
-    })();
     s.errors = 0;
     s.pauseMs = nextPause(s, camp); // случайный перерыв после успешной отправки
     s.nextAt = now + s.pauseMs;
+    try {
+      await persist(db.transaction(async () => {
+        await qSent.run(String(r.idMessage), text, now, msg.id);
+        await qInc.run(inst.id, today);
+        await qFirstDay.run(today, inst.id);
+      }));
+    } catch (e) {
+      // в очередь не возвращаем: сообщение уже доставлено в GREEN-API, повтор был бы дублем получателю
+      monitoring.captureError(e, 'worker-save', { instanceId: inst.id, campaignId: camp.id, messageId: msg.id });
+      console.error('worker-save', e);
+    }
   } catch (e) {
     const status = e.status;
     const text = String(e.message || e).slice(0, 500);
     // ошибки GREEN-API — штатная работа очереди; всё остальное (БД, баг в коде) — в Sentry
     if (!(e instanceof GreenApiError)) monitoring.captureError(e, 'worker-send', { instanceId: inst.id, campaignId: camp.id, messageId: msg.id });
+    // сначала перерыв в памяти, потом запись в базу: даже если база недоступна, номер не начнёт частить
+    s.errors++;
+    s.longRest = false;
+    // 400 — получателю отказано, идём к следующему с обычным перерывом; остальное — короткий отдых и повтор
+    s.pauseMs = status === 400 ? pickPauseMs(camp) : RETRY_DELAY_SEC * 1000;
+    s.nextAt = Date.now() + s.pauseMs;
     if (status === 466) {
-      await qRequeue.run(text, msg.id);
+      await persist(() => qRequeue.run(text, msg.id));
       await stopInstance(inst.id, 'Исчерпан тариф GREEN-API (466)');
     } else if (status === 401 || status === 403) {
-      await qRequeue.run(text, msg.id);
+      await persist(() => qRequeue.run(text, msg.id));
       await stopInstance(inst.id, `GREEN-API отклонил авторизацию (${status})`);
     } else if (status === 400) {
-      await qFinal.run('failed', text, msg.id);
-      s.errors++;
-      s.pauseMs = Math.max(MIN_DELAY_SEC, camp.delay_min) * 1000;
-      s.nextAt = Date.now() + s.pauseMs;
+      await persist(() => qFinal.run('failed', text, msg.id));
     } else {
       // сеть, 429, 5xx — сообщение обратно в очередь, номер отдыхает
-      await qRequeue.run(text, msg.id);
-      s.errors++;
-      s.pauseMs = RETRY_DELAY_SEC * 1000;
-      s.nextAt = Date.now() + s.pauseMs;
+      await persist(() => qRequeue.run(text, msg.id));
     }
     if (s.errors >= MAX_ERRORS) await stopInstance(inst.id, `${MAX_ERRORS} ошибок подряд. Последняя: ${text}`);
   }
 }
 
+// Тики не накладываются: если предыдущий ещё ждёт ответа базы, новый пропускаем.
+// Иначе два тика могли бы одновременно выдать одному номеру два сообщения подряд без перерыва.
+let ticking = false;
 async function tick() {
+  if (ticking) return;
+  ticking = true;
+  try {await tickOnce();} finally {ticking = false;}
+}
+async function tickOnce() {
   const camps = await db.prepare("SELECT * FROM campaigns WHERE status = 'running' ORDER BY id").all();
   if (!camps.length) return;
   const done = await Promise.all(camps.map(finishIfDone));
@@ -200,21 +245,28 @@ async function tick() {
   for (const inst of insts) {
     const s = rt(inst.id);
     if (s.busy || now < s.nextAt) continue;
-    if ((await sentToday(inst.id, today)) >= dailyLimit(inst, today)) continue;
-    for (const camp of active) {
+    const mine = active.filter((camp) => {
       let ids = [];
       try {ids = JSON.parse(camp.instance_ids) || [];} catch {/* пусто = все номера */}
-      if (ids.length && !ids.includes(inst.id)) continue;
-      if (!(hour >= camp.hour_from && hour < camp.hour_to)) continue;
+      return (!ids.length || ids.includes(inst.id)) && hour >= camp.hour_from && hour < camp.hour_to;
+    });
+    if (!mine.length) continue;
+    if (!s.primed) {
+      await prime(inst, s, mine[0]);
+      if (Date.now() < s.nextAt) continue;
+    }
+    if ((await sentToday(inst.id, today)) >= dailyLimit(inst, today)) continue;
+    for (const camp of mine) {
       const msg = await qClaim.get(inst.id, camp.id);
       if (!msg) continue;
       s.busy = true;
       processMessage(inst, camp, msg).
       catch(async (e) => {
+        // сюда попадаем, когда не удалась запись в базу; обработчик сам падать не должен
+        s.nextAt = Math.max(s.nextAt, Date.now() + RETRY_DELAY_SEC * 1000);
         monitoring.captureError(e, 'worker', { instanceId: inst.id, campaignId: camp.id, messageId: msg.id });
-        await qRequeue.run(String(e.message || e).slice(0, 500), msg.id);
-        await logEvent(`Сбой воркера: ${e.message}`, 'error', inst.id);
-        s.nextAt = Date.now() + RETRY_DELAY_SEC * 1000;
+        console.error('worker', e);
+        await logEvent(`Сбой воркера: ${e.message}`, 'error', inst.id).catch(() => {});
       }).
       finally(() => {s.busy = false;});
       break;
@@ -260,7 +312,8 @@ async function start() {
   // при старте сервера все «sending» возвращаем в очередь
   const r = await db.prepare("UPDATE messages SET status = 'pending' WHERE status = 'sending'").run();
   if (r.changes) await logEvent(`После перезапуска возвращено в очередь: ${r.changes}`, 'warn');
-  timers.push(setInterval(() => tick().catch((e) => {console.error('tick', e);monitoring.captureError(e, 'worker-tick');}), TICK_MS));
+  // после stop() пул базы уже закрыт: ошибку тика, начатого до остановки, не считаем сбоем
+  timers.push(setInterval(() => tick().catch((e) => {if (!timers.length) return;console.error('tick', e);monitoring.captureError(e, 'worker-tick');}), TICK_MS));
   const poll = () => pollStates().catch((e) => monitoring.captureError(e, 'poll-states'));
   timers.push(setInterval(poll, POLL_SEC * 1000));
   poll();

@@ -68,6 +68,8 @@ for (const method of ['get', 'post', 'put', 'patch', 'delete']) {
   app[method] = (route, ...handlers) => register(route, ...handlers.map((fn) =>
     fn.constructor.name === 'AsyncFunction' ? wrap(fn) : fn));
 }
+// нечисловой id в адресе — это «не найдено», а не ошибка базы данных
+app.param('id', (req, res, next, value) => /^\d{1,9}$/.test(value) ? next() : res.status(404).json({ error: 'Не найдено' }));
 app.set('trust proxy', true);
 app.disable('x-powered-by');
 app.use(express.json({ limit: '2mb' }));
@@ -391,7 +393,7 @@ app.post('/api/import-standard', upload.single('file'), async (req, res) => {
   if (!parsed.contacts.length) throw bad('Добавьте хотя бы один номер в шаблон');
   if (String(req.body?.hash || '') !== fileHash(req.file.buffer)) throw bad('Файл изменился после проверки. Проверьте его ещё раз');
   const listName = String(req.body?.name || '').trim().slice(0, 120) || filename.replace(/\.xlsx$/i, '');
-  const result = await importFile(req.file.buffer, filename, listName, parseStandardFile);
+  const result = await importFile(req.file.buffer, filename, listName, parseStandardFile, parsed);
   await logEvent(`Импорт «${listName}» по шаблону: получателей ${result.valid - result.opted_out}, дублей ${result.duplicates}`);
   res.json(result);
 });
@@ -411,7 +413,8 @@ app.get('/api/lists/:id/recipients.csv', async (req, res) => {
     JOIN contacts c ON c.id = lc.contact_id
     WHERE lc.list_id = ? AND c.opted_out = 0 ORDER BY lc.contact_id`).all(list.id);
   for (const row of rows) {
-    const vars = JSON.parse(row.vars || '{}');
+    let vars = {};
+    try {vars = JSON.parse(row.vars || '{}') || {};} catch {/* пусто */}
     res.write([`+${row.phone}`, row.name, vars['город'] || ''].map(csvCell).join(';') + '\r\n');
   }
   res.end();
@@ -910,6 +913,12 @@ app.use((err, req, res, next) => {
   // HttpError — ожидаемые ответы (например, GREEN-API недоступен); в Sentry только настоящие сбои
   if (status >= 500 && !(err instanceof HttpError)) monitoring.captureError(err, 'api', { method: req.method, path: req.route?.path || req.path });
   res.status(status).json({ error: message });
+});
+
+// Необработанная ошибка в фоновой задаче не должна ронять сервис посреди рассылки
+process.on('unhandledRejection', (e) => {
+  console.error('unhandledRejection', e);
+  monitoring.captureError(e instanceof Error ? e : new Error(String(e)), 'unhandled-rejection');
 });
 
 let server;
