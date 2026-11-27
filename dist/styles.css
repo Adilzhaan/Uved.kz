@@ -2439,3 +2439,88 @@ details.advanced[open] summary {
     scroll-behavior: auto !important;
   }
 }
+
+/* ───── Уведомления ───── */
+.alerts-table td:first-child {
+  white-space: nowrap;
+}
+.alerts-table .alert-text {
+  min-width: 16rem;
+  overflow-wrap: anywhere;
+}
+.alerts-table tr.is-new .alert-text {
+  font-weight: 600;
+}
+.alerts-table .badge + .badge {
+  margin-left: 8px;
+}
+
+/* ───── Подсказки: что не работает и что делать ───── */
+.problems {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.problem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--warning);
+  border-radius: var(--r-card);
+}
+.problem.error {
+  border-left-color: var(--negative);
+}
+.problem > div {
+  flex: 1 1 20rem;
+  min-width: 0;
+}
+.problem h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+}
+.problem p {
+  margin: 0;
+  max-width: 70ch;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text-2);
+}
+.problem-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--warning);
+  border-radius: var(--r-control);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 22px;
+}
+.problem-banner.error {
+  border-left-color: var(--negative);
+}
+.problem-banner strong {
+  font-weight: 600;
+}
+.problem-banner-more {
+  color: var(--accent-ink);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.problem-banner:hover {
+  background: var(--raised);
+}

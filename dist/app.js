@@ -95,6 +95,7 @@ const navigation = [
   ["numbers", "phone", "WhatsApp-номера"],
   ["base", "database", "База для рассылки"],
   ["chats", "message", "Чаты"],
+  ["alerts", "bell", "Уведомления"],
   ["templates", "copy", "Шаблоны"],
 ];
 const data = {
@@ -118,6 +119,8 @@ const instanceStates = {
   yellowCard: ["Жёлтая карточка", "failed"],
   starting: ["Запускается", "scheduled"],
   sleepMode: ["Спящий режим", "paused"],
+  expired: ["Не оплачен", "failed"],
+  badToken: ["Нет доступа", "failed"],
   unknown: ["Неизвестно", ""],
 };
 const campaignStatuses = {
@@ -513,7 +516,9 @@ function numberCard(i) {
   const on = i.state === "authorized";
   const a = (label, ic, act, cls = "") =>
     button(label, ic, act, cls, `data-id="${i.id}"`);
-  const note = !on
+  const note = i.state === "expired"
+    ? "Подключение GREEN-API не оплачено — сообщения с него не уходят."
+    : !on
     ? "Номер не подключён — сообщения с него не уходят."
     : !i.enabled
       ? `${!i.disabled_reason || i.disabled_reason === "Выключен вручную" ? "Выключен вручную" : `Выключен: ${esc(i.disabled_reason)}`}. Сообщения с него не уходят.`
@@ -765,7 +770,85 @@ async function openChat(phone) {
   const box = $("#chat-messages");
   if (box) box.scrollTop = box.scrollHeight;
 }
+/* ───────── Подсказки: что сейчас не работает и что с этим делать ───────── */
+function problems() {
+  const out = [];
+  const add = (level, title, text, label, act, id) => out.push({ level, title, text, label, act, id });
+  for (const i of data.instances || []) {
+    const name = `«${esc(i.name)}»`;
+    const reason = i.disabled_reason || "";
+    if (i.state === "expired")
+      add("error", `Подключение ${name} не оплачено`, "Срок оплаты GREEN-API закончился, сообщения с этого номера не уходят. Продлите подключение в кабинете GREEN-API — номер заработает сам, заново подключать его не нужно.", "Открыть номер", "instance-open", i.id);
+    else if (i.state === "badToken")
+      add("error", `GREEN-API не принимает данные подключения ${name}`, "Скорее всего, в кабинете GREEN-API сменили ключ доступа или удалили подключение. Удалите номер здесь и добавьте его заново с новыми данными.", "Открыть номер", "instance-open", i.id);
+    else if (i.state === "blocked")
+      add("error", `WhatsApp заблокировал номер ${name}`, "Писать с него больше нельзя. Подключите другой номер и продолжите рассылку с него.", "Подключить номер", "connect-number");
+    else if (i.state === "yellowCard")
+      add("error", `WhatsApp ограничил номер ${name}`, "Это предупреждение перед блокировкой. Мы остановили отправку с этого номера. Дайте ему отдохнуть хотя бы сутки и не включайте в рассылки сразу.", "Открыть номер", "instance-open", i.id);
+    else if (i.state === "notAuthorized")
+      i.sent_total > 0
+        ? add("error", `Номер ${name} отключился от WhatsApp`, "Так бывает, если на телефоне вышли из «Связанных устройств» или телефон долго был без интернета. Подключите номер заново по QR-коду — рассылка продолжится сама.", "Подключить по QR", "instance-qr", i.id)
+        : add("warn", `Номер ${name} ещё не подключён`, "Откройте QR-код и наведите на него камеру телефона в WhatsApp: «Связанные устройства» → «Привязка устройства».", "Подключить по QR", "instance-qr", i.id);
+    else if (i.state === "sleepMode")
+      add("warn", `Телефон с номером ${name} не в сети`, "Включите телефон и проверьте на нём интернет. Пока телефон не в сети, сообщения с номера не уходят.", "Открыть номер", "instance-open", i.id);
+    else if (i.state === "authorized" && !i.enabled && reason && reason !== "Выключен вручную") {
+      if (reason.includes("466"))
+        add("error", `На подключении ${name} закончился тариф GREEN-API`, "Лимит сообщений по тарифу исчерпан. Продлите или смените тариф в кабинете GREEN-API, затем включите номер переключателем «В рассылках».", "Открыть номер", "instance-open", i.id);
+      else if (/401|403/.test(reason))
+        add("error", `GREEN-API не принимает данные подключения ${name}`, "Проверьте подключение в кабинете GREEN-API. Если ключ доступа меняли — удалите номер здесь и добавьте заново.", "Открыть номер", "instance-open", i.id);
+      else if (reason.includes("ошибок подряд"))
+        add("error", `Номер ${name} остановлен после нескольких ошибок подряд`, "Мы остановили отправку, чтобы не навредить номеру. Проверьте, что телефон включён и в сети, и включите номер переключателем «В рассылках».", "Открыть номер", "instance-open", i.id);
+      else add("error", `Номер ${name} остановлен`, esc(reason), "Открыть номер", "instance-open", i.id);
+    }
+  }
+  for (const c of data.campaigns || []) {
+    if (c.status !== "running" || !c.stats.queue) continue;
+    const mine = (data.instances || []).filter((i) => c.instance_ids.includes(i.id));
+    if (!mine.some(isReady))
+      add("error", `Рассылка «${esc(c.name)}» стоит`, "Ни один из её номеров сейчас не может отправлять. Исправьте номер по подсказке выше — рассылка продолжится сама с того же места.", "Открыть рассылку", "campaign-open", c.id);
+  }
+  if (me && !me.webhook_ready)
+    add("warn", "Ответы и статусы доставки не приходят", "На сервере не задан адрес для уведомлений GREEN-API (PUBLIC_URL и WEBHOOK_SECRET). Без него не видно, доставлены ли сообщения, и не работают чаты и отписка по слову «СТОП».", "", "", null);
+  return out;
+}
+function problemCards() {
+  return problems()
+    .map(
+      (p) =>
+        `<article class="problem ${p.level}" role="${p.level === "error" ? "alert" : "status"}"><div><h3>${p.title}</h3><p>${p.text}</p></div>${p.label ? button(p.label, null, p.act, p.level === "error" ? "primary" : "", p.id != null ? `data-id="${p.id}"` : "") : ""}</article>`,
+    )
+    .join("");
+}
+// Одна строка наверху любой страницы: есть проблемы — ведёт в «Уведомления»
+function problemBanner() {
+  const list = problems();
+  if (!list.length || page === "alerts") return "";
+  const errors = list.filter((p) => p.level === "error");
+  const first = (errors[0] || list[0]).title;
+  return `<a class="problem-banner ${errors.length ? "error" : "warn"}" href="#alerts"><span><strong>${first}</strong>${list.length > 1 ? ` и ещё ${list.length - 1}` : ""}</span><span class="problem-banner-more">Что делать</span></a>`;
+}
+/* ───────── Уведомления об ошибках ───────── */
+const alertLevels = { error: ["Ошибка", "failed"], warn: ["Внимание", "paused"] };
+function alertsPage() {
+  const rows = data.alerts?.rows || [];
+  const errors = rows.filter((r) => r.level === "error").length;
+  return (
+    heading("Уведомления", "") +
+    (problems().length ? `<section class="problems" aria-label="Требует внимания сейчас">${problemCards()}</section>` : "") +
+    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Журнал ошибок <span class="section-count">${rows.length}</span></h2><span class="section-caption">Ошибок: ${num(errors)}</span></div>${
+      rows.length
+        ? `<div class="table-scroll"><table class="connection-table alerts-table"><thead><tr><th>Когда</th><th>Важность</th><th>Что случилось</th><th>Номер</th></tr></thead><tbody>${rows
+            .map(
+              (r) =>
+                `<tr class="${r.is_new ? "is-new" : ""}"><td data-label="Когда">${dateTime(r.ts)}</td><td data-label="Важность">${badge(alertLevels, r.level)}${r.is_new ? ' <span class="badge running"><i></i>Новое</span>' : ""}</td><td class="alert-text">${esc(r.message)}</td><td data-label="Номер">${r.instance_name ? `<button type="button" class="link-button" data-act="instance-open" data-id="${r.instance_id}">${esc(r.instance_name)}</button>` : "—"}</td></tr>`,
+            )
+            .join("")}</tbody></table></div>`
+        : empty("bell", "Ошибок нет", "Если номер остановится или отправка даст сбой, запись появится здесь.")
+    }</section>`
+  );
+}
 const pages = {
+  alerts: alertsPage,
   chats: chatsPage,
   campaigns: campaignsPage,
   numbers: numbersPage,
@@ -777,7 +860,7 @@ function renderChrome() {
   $("#navigation").innerHTML = navigation
     .map(
       ([id, ic, label]) =>
-        `<a href="#${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${id === "chats" && data.overview?.chats_unread ? `<b class="nav-badge" aria-label="Непрочитанных чатов: ${data.overview.chats_unread}">${num(data.overview.chats_unread)}</b>` : ""}</a>`,
+        `<a href="#${id}" class="nav-item ${page === id ? "active" : ""}" ${page === id ? 'aria-current="page"' : ""}>${icon(ic)}<span>${label}</span>${id === "alerts" && (loaded ? problems().length : 0) + (data.overview?.alerts_unread || 0) ? `<b class="nav-badge" aria-label="Требуют внимания">${num((loaded ? problems().length : 0) + (data.overview?.alerts_unread || 0))}</b>` : ""}${id === "chats" && data.overview?.chats_unread ? `<b class="nav-badge" aria-label="Непрочитанных чатов: ${data.overview.chats_unread}">${num(data.overview.chats_unread)}</b>` : ""}</a>`,
     )
     .join("");
   $("#breadcrumb-page").textContent = nav[2];
@@ -797,7 +880,7 @@ function render() {
     oldBox.scrollHeight - oldBox.scrollTop - oldBox.clientHeight < 40;
   const oldTop = oldBox?.scrollTop;
   $("#main").innerHTML = loaded
-    ? pages[page]()
+    ? problemBanner() + pages[page]()
     : '<div class="empty">Загрузка…</div>';
   const box = $("#chat-messages");
   if (box) box.scrollTop = atBottom ? box.scrollHeight : oldTop;
@@ -852,7 +935,21 @@ async function load() {
   }
   if (page === "templates")
     jobs.push(api("/templates").then((r) => (data.templates = r)));
+  if (page === "alerts")
+    jobs.push(
+      api("/alerts").then((r) => {
+        // пометку «Новое» держим, пока человек на странице; счётчик в меню гасим сразу
+        const fresh = new Set((data.alerts?.rows || []).filter((x) => x.is_new).map((x) => x.id));
+        r.rows.forEach((x) => (x.is_new = x.is_new || fresh.has(x.id)));
+        data.alerts = r;
+      }),
+    );
+  else data.alerts = null;
   await Promise.all(jobs);
+  if (page === "alerts" && data.overview?.alerts_unread) {
+    data.overview.alerts_unread = 0;
+    post("/alerts/seen").catch(() => {});
+  }
   loaded = true;
 }
 let refreshing = null;

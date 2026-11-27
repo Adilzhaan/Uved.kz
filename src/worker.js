@@ -301,9 +301,12 @@ async function applyState(id, state, phone) {
 
 async function pollStates() {
   const insts = await db.prepare('SELECT * FROM instances').all();
-  await Promise.all(insts.map((i) => refreshInstance(i).catch((e) => {
+  await Promise.all(insts.map((i) => refreshInstance(i).catch(async (e) => {
     // недоступность GREEN-API здесь обычна (опрос раз в минуту), а остальное — сбой
-    if (!(e instanceof GreenApiError)) monitoring.captureError(e, 'poll-states', { instanceId: i.id });
+    if (!(e instanceof GreenApiError)) return monitoring.captureError(e, 'poll-states', { instanceId: i.id });
+    // подключение не оплачено или данные доступа отозваны — показываем это человеку как состояние номера
+    const state = e.status === 466 || /expired/i.test(e.message) ? 'expired' : e.status === 401 || e.status === 403 ? 'badToken' : null;
+    if (state) await applyState(i.id, state).catch(() => {});
   })));
 }
 

@@ -876,6 +876,20 @@ app.get('/api/events', async (req, res) => {
       ORDER BY e.id DESC LIMIT ? OFFSET ?`).all(limit, offset)
   });
 });
+// Уведомления: ошибки и предупреждения из журнала. «Просмотрено» — номер последней записи, которую видели.
+const ALERT_LEVELS = "('error', 'warn')";
+app.get('/api/alerts', async (req, res) => {
+  const seen = Number(await getSetting('alerts_seen_id', '0')) || 0;
+  const rows = await db.prepare(`SELECT e.id, e.ts, e.level, e.message, e.instance_id, i.name AS instance_name
+    FROM events e LEFT JOIN instances i ON i.id = e.instance_id
+    WHERE e.level IN ${ALERT_LEVELS} ORDER BY e.id DESC LIMIT 200`).all();
+  res.json({ seen_id: seen, rows: rows.map((r) => ({ ...r, is_new: r.id > seen })) });
+});
+app.post('/api/alerts/seen', async (req, res) => {
+  const last = (await db.prepare('SELECT COALESCE(MAX(id), 0) AS id FROM events').get()).id;
+  await setSetting('alerts_seen_id', last);
+  res.json({ ok: true, seen_id: Number(last) });
+});
 app.get('/api/overview', async (req, res) => {
   const today = dayInTz();
   const insts = await db.prepare('SELECT * FROM instances').all();
@@ -895,6 +909,8 @@ app.get('/api/overview', async (req, res) => {
       WHERE c.status IN ('running', 'paused') AND m.status IN ('pending', 'sending')`).get()).n,
     incoming: (await db.prepare('SELECT COUNT(*) n FROM incoming').get()).n,
     chats_unread: (await db.prepare('SELECT COUNT(DISTINCT phone) n FROM incoming WHERE seen = 0').get()).n,
+    // в счётчик меню идут только ошибки: предупреждения — в основном следы обычных действий
+    alerts_unread: (await db.prepare("SELECT COUNT(*) n FROM events WHERE level = 'error' AND id > ?").get(Number(await getSetting('alerts_seen_id', '0')) || 0)).n,
     campaigns_started: (await db.prepare("SELECT COUNT(*) n FROM campaigns WHERE status <> 'draft'").get()).n
   });
 });

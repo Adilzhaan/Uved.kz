@@ -284,6 +284,16 @@ async function apiTests() {
   assert.ok(ev.rows.some((e) => e.level === 'error' && /остановлен/.test(e.message)));
   ok(`yellowCard останавливает номер (отправлено ${frozen}, дальше тишина), запись в журнале`);
 
+  // уведомления: ошибка попала в список и в счётчик, после просмотра счётчик гаснет
+  const al = await get('/api/alerts');
+  assert.ok(al.rows.some((r) => r.level === 'error' && r.is_new && /остановлен/.test(r.message) && r.instance_name));
+  assert.ok(al.rows.every((r) => r.level === 'error' || r.level === 'warn'));
+  assert.ok((await get('/api/overview')).alerts_unread >= 1);
+  await post('/api/alerts/seen');
+  assert.strictEqual((await get('/api/overview')).alerts_unread, 0);
+  assert.ok((await get('/api/alerts')).rows.every((r) => !r.is_new));
+  ok('уведомления: ошибки в списке и счётчике, после просмотра счётчик обнуляется');
+
   await mock('/_state', { idInstance: 1002, state: 'authorized' });
   await until(async () => (await instances())[1].state === 'authorized', 'B снова authorized');
   assert.strictEqual((await instances())[1].enabled, 0, 'сам не включается');
@@ -500,6 +510,11 @@ async function uiTests() {
     await page.waitForSelector('#import-result [data-act=form-resume]');
     await page.click('dialog [data-act=close]');
     await page.waitForSelector('tr:has-text("ui")');
+
+    await page.click('#navigation a[href="#alerts"]');
+    await page.waitForSelector('.alerts-table tr:has-text("остановлен")');
+    await page.waitForSelector('.problems .problem');
+    await page.screenshot({ path: path.join(TMP, 'ui-alerts.png'), animations: 'disabled' });
 
     // мобильная ширина
     await page.setViewportSize({ width: 390, height: 844 });
