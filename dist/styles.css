@@ -2524,3 +2524,12 @@ details.advanced[open] summary {
 .problem-banner:hover {
   background: var(--raised);
 }
+
+/* ───── SMS-рассылки ───── */
+.sms-reason {
+  margin: 6px 0 0;
+  max-width: 34ch;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--negative);
+}

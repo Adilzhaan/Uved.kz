@@ -94,6 +94,7 @@ const navigation = [
   ["campaigns", "send", "Рассылки"],
   ["numbers", "phone", "WhatsApp-номера"],
   ["base", "database", "База для рассылки"],
+  ["sms", "mail", "SMS-рассылки"],
   ["chats", "message", "Чаты"],
   ["alerts", "bell", "Уведомления"],
   ["templates", "copy", "Шаблоны"],
@@ -486,6 +487,91 @@ function campaignDetail(id) {
   );
 }
 
+/* ───────── SMS-рассылки (SMSC) ───────── */
+const smsStatuses = {
+  running: ["Отправляется", "running"],
+  paused: ["На паузе", "paused"],
+  finished: ["Завершена", "done"],
+  stopped: ["Остановлена", "stopped"],
+};
+const money = (n) => `${Number(n || 0).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} тг`;
+// Сколько SMS займёт текст: кириллица 70 знаков (67 в составной), латиница 160 (153)
+function smsParts(text) {
+  const s = String(text || "");
+  if (!s) return 0;
+  const latin = /^[\x00-\x7F]*$/.test(s);
+  const [single, multi] = latin ? [160, 153] : [70, 67];
+  return s.length <= single ? 1 : Math.ceil(s.length / multi);
+}
+function smsCounterText(text) {
+  const n = String(text || "").length;
+  const parts = smsParts(text);
+  return n
+    ? `${num(n)} знаков — ${num(parts)} SMS на одного получателя${parts > 1 ? ". Каждая оплачивается отдельно, короткий текст дешевле." : ""}`
+    : "Одна SMS вмещает 70 знаков на русском. Текст длиннее делится на несколько SMS.";
+}
+function smsPage() {
+  const s = data.sms || { campaigns: [] };
+  const rows = s.campaigns;
+  if (data.sms && !s.ready)
+    return (
+      heading("SMS-рассылки", "") +
+      `<section class="panel">${empty("mail", "SMS пока не подключены", "На сервере не задан ключ SMSC. Создайте ключ в кабинете smsc.kz и добавьте его в настройки сервера как SMSC_API_KEY.")}</section>`
+    );
+  const act = (c, label, ic, name, cls = "compact") =>
+    button(label, ic, name, cls, `data-id="${c.id}"`);
+  return (
+    heading(
+      "SMS-рассылки",
+      "",
+      button("Написать SMS", "message", "sms-test") +
+        button("Новая SMS-рассылка", "plus", "sms-new", "primary"),
+    ) +
+    `<section class="panel"><div class="panel-heading simple-panel-heading"><h2>Мои SMS-рассылки <span class="section-count">${rows.length}</span></h2><span class="section-caption">${s.balance == null ? "" : `На счёте SMSC: ${money(s.balance)}`}</span></div>${
+      rows.length
+        ? `<div class="table-scroll"><table class="connection-table"><thead><tr><th>Название</th><th>Статус</th><th>Отправлено</th><th>Доставлено</th><th>Потрачено</th><th><span class="sr-only">Действия</span></th></tr></thead><tbody>${rows
+            .map((c) => {
+              const st = c.stats;
+              const done = st.total ? Math.floor(((st.total - st.queue) / st.total) * 100) : 0;
+              return `<tr><td><span class="campaign-name"><span><strong>${esc(c.name)}</strong><small>${esc(c.list_id === null ? "Все контакты" : data.lists.find((l) => l.id === c.list_id)?.name || "База удалена")}</small></span></span></td><td data-label="Статус">${badge(smsStatuses, c.status)}${c.pause_reason ? `<p class="sms-reason">${esc(c.pause_reason)}</p>` : ""}</td><td data-label="Отправлено"><span class="progress-cell"><strong>${num(st.sent)} из ${num(st.total)}</strong><span class="mini-progress"><span style="width:${done}%"></span></span></span>${st.failed ? `<small class="muted">ошибок: ${num(st.failed)}</small>` : ""}</td><td data-label="Доставлено">${st.sent ? num(st.delivered) : "—"}</td><td data-label="Потрачено">${st.cost ? money(st.cost) : "—"}</td><td class="connection-actions"><div class="row-actions">${c.status === "running" ? act(c, "Пауза", "pause", "sms-pause") : ""}${c.status === "paused" ? act(c, "Продолжить", "play", "sms-resume", "primary compact") : ""}${["running", "paused"].includes(c.status) ? act(c, "Остановить", "stop", "sms-stop", "text danger-button compact") : act(c, "Удалить", "trash", "sms-delete", "text danger-button compact")}</div></td></tr>`;
+            })
+            .join("")}</tbody></table></div>`
+        : empty("mail", "SMS-рассылок пока нет", "Нажмите «Новая SMS-рассылка», выберите базу и напишите короткий текст.")
+    }</section>`
+  );
+}
+function smsForm() {
+  if (!data.lists.length && !data.overview.contacts) return toast("Сначала загрузите базу контактов");
+  dialogState = { kind: "form" };
+  const name = `SMS ${new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: tz }).format(new Date())}`;
+  modal(
+    "Новая SMS-рассылка",
+    `<form id="sms-form"><div class="field"><label for="sms-list">1. Кому отправляем</label><select id="sms-list" name="list_id">${data.lists.map((l) => `<option value="${l.id}" data-count="${l.contacts}">${esc(l.name)} — ${num(l.contacts)}</option>`).join("")}<option value="" data-count="${data.overview.contacts || 0}">Все контакты — ${num(data.overview.contacts)}</option></select><small>Отписавшиеся исключаются автоматически.</small></div>
+<div class="field"><label for="sms-text">2. Текст SMS</label><textarea id="sms-text" name="text" maxlength="1000" required placeholder="Здравствуйте, {name}! …"></textarea><div class="hint-row"><button type="button" class="chip" data-act="sms-insert" data-text="{name}">+ имя</button></div><small id="sms-counter" aria-live="polite">${smsCounterText("")}</small></div>
+<div class="field"><label for="sms-name">Название рассылки</label><input id="sms-name" name="name" value="${esc(name)}" maxlength="120" required/></div>
+<div class="field"><label for="sms-hfrom">Часы отправки</label><div class="form-grid"><input id="sms-hfrom" name="hour_from" type="number" min="0" max="23" value="10" required aria-label="Час с"/><input name="hour_to" type="number" min="1" max="24" value="20" required aria-label="Час до"/></div><small>Время ${esc(tz)}. Ночью SMS не уходят.</small></div>
+<div class="info-box">SMS платные: деньги списываются со счёта SMSC за каждую отправленную SMS. Для рекламных рассылок у SMSC нужен договор — без него отправка будет отклонена.</div></form>`,
+    button("Отмена", null, "close") +
+      `<button type="submit" form="sms-form" class="button primary">${icon("play")}Запустить SMS-рассылку</button>`,
+  );
+  $("#sms-text").focus();
+}
+function smsTestDialog() {
+  dialogState = { kind: "form" };
+  modal(
+    "Написать SMS",
+    `<p>Введите телефон получателя и текст. SMS отправится сразу. Она платная, как и в рассылке.</p><form id="sms-test-form"><div class="field"><label for="smst-phone">Телефон получателя</label><input id="smst-phone" name="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 701 123 45 67" required/><small>Введите номер с кодом страны.</small></div><div class="field"><label for="smst-text">Сообщение</label><textarea id="smst-text" name="text" maxlength="1000" placeholder="Напишите текст SMS" required></textarea><small id="smst-counter" aria-live="polite">${smsCounterText("")}</small></div><div id="sms-test-result" class="import-result" aria-live="polite"></div></form>`,
+    button("Закрыть", null, "close") +
+      `<button type="submit" form="sms-test-form" class="button primary">${icon("send")}Отправить</button>`,
+  );
+  $("#smst-phone").focus();
+}
+async function smsAction(id, action, text) {
+  await post(`/sms/${id}/${action}`);
+  toast(text);
+  await refresh();
+}
+
 /* ───────── Шаблоны ───────── */
 function templatesPage() {
   return (
@@ -807,6 +893,9 @@ function problems() {
     if (!mine.some(isReady))
       add("error", `Рассылка «${esc(c.name)}» стоит`, "Ни один из её номеров сейчас не может отправлять. Исправьте номер по подсказке выше — рассылка продолжится сама с того же места.", "Открыть рассылку", "campaign-open", c.id);
   }
+  for (const c of data.sms?.campaigns || [])
+    if (c.status === "paused" && c.pause_reason)
+      add("error", `SMS-рассылка «${esc(c.name)}» остановлена`, esc(c.pause_reason), "Открыть SMS-рассылки", "go-sms");
   if (me && !me.webhook_ready)
     add("warn", "Ответы и статусы доставки не приходят", "На сервере не задан адрес для уведомлений GREEN-API (PUBLIC_URL и WEBHOOK_SECRET). Без него не видно, доставлены ли сообщения, и не работают чаты и отписка по слову «СТОП».", "", "", null);
   return out;
@@ -848,6 +937,7 @@ function alertsPage() {
   );
 }
 const pages = {
+  sms: smsPage,
   alerts: alertsPage,
   chats: chatsPage,
   campaigns: campaignsPage,
@@ -921,8 +1011,11 @@ async function load() {
     }),
     api("/overview").then((r) => (data.overview = r)),
   ];
-  if (page === "base" || page === "campaigns")
+  if (page === "base" || page === "campaigns" || page === "sms")
     jobs.push(api("/lists").then((r) => (data.lists = r)));
+  // SMS-рассылки подгружаем всегда: остановка из-за ошибки должна попасть в подсказки
+  if (me?.sms_ready || page === "sms")
+    jobs.push(api("/sms").then((r) => (data.sms = r)));
   jobs.push(api("/campaigns").then((r) => (data.campaigns = r)));
   if (page === "chats") {
     jobs.push(api("/chats").then((r) => (data.chats = r)));
@@ -1094,6 +1187,33 @@ async function instanceAction(id, fn, text) {
   instanceDetail(id);
 }
 const actions = {
+  "sms-new": () => smsForm(),
+  "sms-test": () => smsTestDialog(),
+  "go-sms": () => goPage("sms"),
+  "sms-insert": (el) => {
+    const t = $("#sms-text");
+    t.setRangeText(el.dataset.text, t.selectionStart, t.selectionEnd, "end");
+    t.focus();
+    $("#sms-counter").textContent = smsCounterText(t.value);
+  },
+  "sms-pause": (el) => smsAction(el.dataset.id, "pause", "SMS-рассылка на паузе"),
+  "sms-resume": (el) => smsAction(el.dataset.id, "resume", "SMS-рассылка продолжена"),
+  "sms-stop": (el) => {
+    const id = el.dataset.id;
+    confirmDialog("Остановить SMS-рассылку?", "Неотправленные SMS не уйдут. Продолжить её потом будет нельзя.", "Остановить", async () => {
+      closeDialog();
+      await smsAction(id, "stop", "SMS-рассылка остановлена");
+    });
+  },
+  "sms-delete": (el) => {
+    const id = el.dataset.id;
+    confirmDialog("Удалить SMS-рассылку?", "Рассылка и её статистика исчезнут из списка.", "Удалить", async () => {
+      await api(`/sms/${id}`, { method: "DELETE" });
+      closeDialog();
+      toast("SMS-рассылка удалена");
+      await refresh();
+    });
+  },
   close: closeDialog,
   refresh,
   confirm: async () => {
@@ -1394,6 +1514,36 @@ document.addEventListener("change", async (e) => {
   }
 });
 const submitters = {
+  "sms-form": async (form) => {
+    const f = new FormData(form);
+    const text = String(f.get("text") || "");
+    const count = Number(form.elements.list_id.selectedOptions[0]?.dataset.count) || 0;
+    const body = { name: f.get("name"), text, list_id: f.get("list_id") ? Number(f.get("list_id")) : null, hour_from: Number(f.get("hour_from")), hour_to: Number(f.get("hour_to")) };
+    confirmDialog(
+      "Запустить SMS-рассылку?",
+      `Получателей — до ${num(count)}, на каждого ${num(smsParts(text))} SMS. Всего примерно ${num(count * smsParts(text))} платных SMS. Отправка начнётся сразу.`,
+      "Запустить",
+      async () => {
+        try {
+          await post("/sms", body);
+        } finally {
+          closeDialog();
+        }
+        toast("SMS-рассылка запущена");
+        goPage("sms");
+        await refresh();
+      },
+    );
+  },
+  "sms-test-form": async (form) => {
+    const out = $("#sms-test-result");
+    try {
+      const r = await post("/sms/test", Object.fromEntries(new FormData(form)));
+      out.innerHTML = `<div class="info-box"><strong>SMS отправлена.</strong> Частей: ${num(r.parts)}${r.cost ? `, стоимость ${money(r.cost)}` : ""}${r.balance != null ? `. На счёте осталось ${money(r.balance)}` : ""}.</div>`;
+    } catch (e) {
+      out.innerHTML = `<p class="error-text">${esc(e.message)}</p>`;
+    }
+  },
   "google-import-form": async (form) => {
     const out = $("#google-import-result");
     out.textContent = "Загружаем контакты из Google Таблицы…";
@@ -1578,6 +1728,8 @@ const submitters = {
 };
 
 document.addEventListener("input", (e) => {
+  if (e.target.id === "sms-text") $("#sms-counter").textContent = smsCounterText(e.target.value);
+  if (e.target.id === "smst-text") $("#smst-counter").textContent = smsCounterText(e.target.value).replace(" на одного получателя", "");
   if (e.target.id === "chat-text") chatDraft = e.target.value;
 });
 // в чате Enter отправляет ответ, Shift+Enter — новая строка

@@ -11,6 +11,7 @@ const { db, initDb, MEDIA_DIR, logEvent, getSetting, setSetting } = require('./d
 const { client } = require('./greenapi');
 const { importFile, parseStandardFile } = require('./importer');
 const worker = require('./worker');
+const sms = require('./sms');
 const { handleWebhook, optOut } = require('./webhooks');
 const {
   TZ, dayInTz, daysBetween, normalizePhone, renderTemplate, makeToken, checkToken, safeEqual, csvCell
@@ -135,7 +136,7 @@ app.post('/api/logout', (req, res) => {
   res.json({ ok: true });
 });
 app.get('/api/me', (req, res) => {
-  res.json({ ok: true, login: ADMIN_LOGIN, tz: TZ, public_url: PUBLIC_URL, webhook_ready: !!(PUBLIC_URL && WEBHOOK_SECRET), self_connect: !!PARTNER_TOKEN, max_numbers: MAX_NUMBERS, min_delay: worker.MIN_DELAY_SEC });
+  res.json({ ok: true, login: ADMIN_LOGIN, tz: TZ, public_url: PUBLIC_URL, webhook_ready: !!(PUBLIC_URL && WEBHOOK_SECRET), self_connect: !!PARTNER_TOKEN, max_numbers: MAX_NUMBERS, min_delay: worker.MIN_DELAY_SEC, sms_ready: sms.ready });
 });
 
 // ───────── Номера ─────────
@@ -915,6 +916,8 @@ app.get('/api/overview', async (req, res) => {
   });
 });
 
+sms.register(app, WEBHOOK_SECRET);
+
 app.use('/api', (req, res) => res.status(404).json({ error: 'Не найдено' }));
 
 // ───────── Статика ─────────
@@ -942,6 +945,7 @@ initDb().then(() => {
   server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Pulse WhatsApp: http://localhost:${PORT} (TZ ${TZ})`);
     worker.start().catch((e) => {console.error('worker start', e);monitoring.captureError(e, 'worker-start');});
+    sms.start().catch((e) => {console.error('sms start', e);monitoring.captureError(e, 'sms-start');});
   });
 }).catch(async (e) => {
   console.error('Database initialization failed', e);
@@ -952,6 +956,7 @@ initDb().then(() => {
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => {
     worker.stop();
+    sms.stop();
     const exit = () => db.close().finally(() => monitoring.flush().finally(() => process.exit(0)));
     if (server) server.close(exit);
     else exit();

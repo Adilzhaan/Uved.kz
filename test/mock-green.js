@@ -59,7 +59,23 @@ function send(id, body) {
   return [200, { idMessage }];
 }
 
+// Фейковый SMSC: /sys/send.php и /sys/balance.php. Номер на 66 → ошибка 7, на 99 → ошибка 6 (нет договора).
+const smsc = { sent: [], balance: 500, key: 'smskey' };
+function smscHandle(req, res, raw) {
+  const p = Object.fromEntries(new URLSearchParams(raw));
+  const out = (o) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); };
+  if (p.apikey !== smsc.key) return out({ error: 'authorise error', error_code: 2 });
+  if (req.url.startsWith('/sys/balance.php')) return out({ balance: String(smsc.balance) });
+  const phone = String(p.phones || '');
+  if (phone.endsWith('66')) return out({ error: 'invalid number', error_code: 7 });
+  if (phone.endsWith('99')) return out({ error: 'message is denied', error_code: 6 });
+  smsc.balance -= 10;
+  smsc.sent.push({ phone, mes: p.mes, charset: p.charset });
+  out({ id: smsc.sent.length, cnt: 1, cost: '10', balance: String(smsc.balance) });
+}
 const server = http.createServer((req, res) => {
+  if (req.url.startsWith('/sys/')) { let raw = ''; req.on('data', (d) => raw += d); req.on('end', () => smscHandle(req, res, raw)); return; }
+  if (req.url === '/_sms') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(smsc)); return; }
   let raw = '';
   req.on('data', (c) => (raw += c));
   req.on('end', () => {

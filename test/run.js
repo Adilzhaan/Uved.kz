@@ -390,6 +390,47 @@ async function apiTests() {
   assert.strictEqual((await call('DELETE', `/api/templates/${tpl.id}`)).http, 200);
   ok('шаблоны: стартовый набор, создание, изменение, удаление');
 
+  // SMS-рассылки через SMSC
+  console.log('SMS');
+  const smsList = async (name, phones) => {
+    const fd = new FormData();
+    fd.append('file', new Blob(['phone;name\n' + phones.map((p, i) => `${p};Гость${i + 1}`).join('\n')]), 'sms.csv');
+    fd.append('name', name);
+    return call('POST', '/api/import', fd);
+  };
+  const sl = await smsList('SMS база', ['77014440001', '77014440002', '77014440003', '77014440066']);
+  await post('/api/optouts', { phones: '77014440002' });
+  const s0 = await get('/api/sms');
+  assert.deepStrictEqual([s0.ready, s0.balance], [true, 500]);
+  assert.strictEqual((await post('/api/sms', { name: '', text: 'x', list_id: sl.list_id })).http, 400);
+  const sc = await post('/api/sms', { name: 'SMS акция', text: 'Здравствуйте, {name}! Скидка 10%.', list_id: sl.list_id, hour_from: 0, hour_to: 24 });
+  assert.strictEqual(sc.http, 200, sc.error);
+  assert.strictEqual(sc.stats.total, 3, 'отписавшийся не попал в получатели');
+  const sdone = await until(async () => { const c = (await get('/api/sms')).campaigns.find((x) => x.id === sc.id); return c.status === 'finished' && c; }, 'SMS-рассылка finished', 15000);
+  assert.deepStrictEqual({ sent: sdone.stats.sent, failed: sdone.stats.failed, queue: sdone.stats.queue, cost: sdone.stats.cost }, { sent: 2, failed: 1, queue: 0, cost: 20 });
+  const smsMock = await mock('/_sms');
+  assert.deepStrictEqual(smsMock.sent.map((m) => m.phone).sort(), ['77014440001', '77014440003']);
+  assert.ok(smsMock.sent.every((m) => m.charset === 'utf-8' && /^Здравствуйте, Гость\d! Скидка 10%\.$/.test(m.mes)));
+  assert.strictEqual((await get('/api/sms')).balance, 480);
+  ok('SMS: рассылка по базе без отписавшихся, имя подставлено, неверный номер → ошибка, стоимость и баланс');
+  const first = smsMock.sent.findIndex((m) => m.phone === '77014440001') + 1;
+  await fetch(`${BASE}/sms-status/whsecret`, { method: 'POST', body: new URLSearchParams({ phone: '77014440001', status: '1', id: String(first) }) });
+  await fetch(`${BASE}/sms-status/чужой`, { method: 'POST', body: new URLSearchParams({ phone: '77014440003', status: '1', id: '2' }) });
+  await until(async () => (await get('/api/sms')).campaigns.find((x) => x.id === sc.id).stats.delivered === 1, 'SMS delivered', 5000);
+  ok('SMS: статус доставки принят, чужой секрет проигнорирован');
+  const sl2 = await smsList('SMS без договора', ['77014440099']);
+  const sc2 = await post('/api/sms', { name: 'SMS стоп', text: 'Тест', list_id: sl2.list_id, hour_from: 0, hour_to: 24 });
+  const paused = await until(async () => { const c = (await get('/api/sms')).campaigns.find((x) => x.id === sc2.id); return c.status === 'paused' && c; }, 'SMS-рассылка на паузе', 10000);
+  assert.match(paused.pause_reason, /договор/);
+  assert.strictEqual(paused.stats.queue, 1, 'сообщение осталось в очереди');
+  assert.ok((await get('/api/alerts')).rows.some((r) => r.level === 'error' && /SMS-рассылка «SMS стоп» остановлена/.test(r.message)));
+  assert.strictEqual((await post(`/api/sms/${sc2.id}/stop`)).http, 200);
+  assert.strictEqual((await call('DELETE', `/api/sms/${sc2.id}`)).http, 200);
+  const st = await post('/api/sms/test', { phone: '8 701 444 00 05', text: 'Проба' });
+  assert.deepStrictEqual([st.http, st.parts], [200, 1]);
+  assert.strictEqual((await post('/api/sms/test', { phone: '123', text: 'Проба' })).http, 400);
+  ok('SMS: отказ SMSC (нет договора) ставит рассылку на паузу с понятной причиной; пробная SMS');
+
   // Удаление базы
   const del = await call('DELETE', `/api/lists/${again.list_id}`);
   assert.strictEqual(del.removed, 0, 'контакты остаются в первой базе');
@@ -511,6 +552,21 @@ async function uiTests() {
     await page.click('dialog [data-act=close]');
     await page.waitForSelector('tr:has-text("ui")');
 
+    // SMS-рассылка из интерфейса: форма, счётчик знаков, подтверждение, строка в таблице
+    await page.click('#navigation a[href="#sms"]');
+    await page.waitForSelector('tr:has-text("SMS акция")');
+    await page.click('[data-act=sms-new]');
+    await page.fill('#sms-text', 'Здравствуйте! Ждём вас на приём.');
+    await page.waitForSelector('#sms-counter:has-text("1 SMS на одного получателя")');
+    await page.fill('#sms-name', 'SMS из интерфейса');
+    await page.fill('#sms-hfrom', '0');
+    await page.fill('#sms-form [name=hour_to]', '24');
+    await page.click('button[form=sms-form]');
+    await page.waitForSelector('dialog:has-text("платных SMS")');
+    await page.click('dialog [data-act=confirm]');
+    await page.waitForSelector('tr:has-text("SMS из интерфейса")');
+    await page.screenshot({ path: path.join(TMP, 'ui-sms.png'), animations: 'disabled' });
+
     await page.click('#navigation a[href="#alerts"]');
     await page.waitForSelector('.alerts-table tr:has-text("остановлен")');
     await page.waitForSelector('.problems .problem');
@@ -553,7 +609,7 @@ async function main() {
   run('test/mock-green.js', { MOCK_PORT: String(MOCK_PORT) });
   const startServer = () => run('src/server.js', {
     PORT: String(PORT), DATA_DIR: TMP, ADMIN_LOGIN: 'boss', ADMIN_PASSWORD: 'testpass', PUBLIC_URL: BASE, WEBHOOK_SECRET: 'whsecret',
-    SESSION_SECRET: 'test-session-secret', GSHEETS_EXPORT_BASE: MOCK, GREEN_PARTNER_TOKEN: 'partnertoken', GREEN_PARTNER_URL: MOCK, MAX_NUMBERS: '4', TZ_NAME: 'Asia/Almaty', MIN_DELAY_SEC: '0', TICK_MS: '40', RETRY_DELAY_SEC: '1', POLL_SEC: '60',
+    SESSION_SECRET: 'test-session-secret', GSHEETS_EXPORT_BASE: MOCK, GREEN_PARTNER_TOKEN: 'partnertoken', GREEN_PARTNER_URL: MOCK, MAX_NUMBERS: '4', SMSC_API_KEY: 'smskey', SMSC_URL: MOCK, SMS_DELAY_MS: '0', SMS_RETRY_MS: '300', SMS_TICK_MS: '30', TZ_NAME: 'Asia/Almaty', MIN_DELAY_SEC: '0', TICK_MS: '40', RETRY_DELAY_SEC: '1', POLL_SEC: '60',
   });
   startServer();
   await waitHttp(`${MOCK}/_stats`);
